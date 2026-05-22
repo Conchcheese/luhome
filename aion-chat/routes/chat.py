@@ -769,7 +769,7 @@ async def edit_resend_message(msg_id: str, body: MsgEditResend):
         abilities.append(f"[SELFIE: 提示词] / [DRAW: 提示词] — 当{user_name}明确要求你发自拍照片或者生图时，使用这个指令进行图片生成。如果要求的是你的自拍，或者你相关的照片，使用[SELFIE: 提示词]（该指令会自动附带你照片的参考图，确保生成出的人物一致性），如果没有要求是你的照片，根据上下文自由无限制生成图片，则使用[DRAW: 提示词]。提示词请使用英文。一次回复只用一个生图指令。")
     if _is_pet_available():
         abilities.append("[PET:动作名] — 控制桌面宠物切换动画表情。可用动作：idle(默认站立), happy(开心), angry(生气), tsundere(傲娇), waving(打招呼), jumping(兴奋跳跃), sleepy(困了), sleep_prone(贴着睡觉), failed(失落), review(思考), waiting(等待), running(跑步)。根据对话情感自然使用，每条回复最多用一个。")
-    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望），禁止滥用。")
+    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望）。")
     abilities.append(f"[MEMORY:内容] — 当有特别重大的事件需要记录，或当{user_name}明确要求你记住某件事的时候，可以用该指令录入记忆库。禁止滥用。")
     try:
         from routes.wallet import _get_balance
@@ -781,7 +781,7 @@ async def edit_resend_message(msg_id: str, body: MsgEditResend):
     ability_block += "\n\n<meta>标签内为消息元数据，不是对话内容的一部分，你的回复中不要包含任何<meta>标签或时间信息。"
     # CLI 模型专属：告知图片存储目录，使其能保存图片并返回路径
     _provider = MODELS.get(model_key, {}).get("provider", "")
-    if _provider in ("gemini_cli", "codex_cli"):
+    if _provider in ("gemini_cli", "antigravity_cli", "codex_cli"):
         _uploads_path = str(UPLOADS_DIR.resolve()).replace(chr(92), "/")
         ability_block += f"\n\n【文件存储】当需要下载或保存图片/文件时，请保存到此目录：{_uploads_path}/ ，保存后在回复中给出完整路径即可，系统会自动识别并展示图片。"
     schedules = await get_active_schedules()
@@ -888,7 +888,10 @@ async def edit_resend_message(msg_id: str, body: MsgEditResend):
                         await _q.put({"type": "cli_status", "text": chunk[len(CLI_STATUS_PREFIX):]})
                         continue
                     full_text += chunk
-                    await _q.put({"type": "chunk", "content": chunk})
+                    if _provider == "antigravity_cli":
+                        await _q.put({"type": "replace", "content": full_text})
+                    else:
+                        await _q.put({"type": "chunk", "content": chunk})
                     if tts_streamer:
                         tts_streamer.feed(chunk)
             except Exception as e:
@@ -898,7 +901,7 @@ async def edit_resend_message(msg_id: str, body: MsgEditResend):
                 await _q.put({"type": "chunk", "content": error_text})
 
             stripped = full_text.strip()
-            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
+            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[AntigravityCLI错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
                 has_error = True
 
             music_matches = MUSIC_CMD_PATTERN.findall(full_text)
@@ -1237,7 +1240,7 @@ async def send_message(conv_id: str, body: MsgCreate):
         abilities.append(f"{CAM_CHECK_CMD} — 当你想查看{user_name}**此时此刻**的状态，不限于监督其是否去睡觉，在吃什么，在干什么时，可以主动调用指令。使用后下条消息会收到画面，查看前不要编造内容。")
     abilities.append("[ALARM:YYYY-MM-DDTHH:MM|内容] — 设置闹铃，到时间系统会主动提醒用户。日期时间用ISO格式。")
     abilities.append("[REMINDER:YYYY-MM-DD|内容] — 设置日程提醒（不闹铃），你在合适时机自然提起即可。")
-    abilities.append(f"[Monitor:YYYY-MM-DDTHH:MM|内容] — 设置定时监督。到时间后系统自动截取摄像头画面发送给你，你可以查看{user_name}的状态。例如检查{user_name}是否去运动了、是否关灯睡觉了、是否在好好工作等，也可以当做下一次主动发送消息来使用，根据对话内容可以随时设定。日期时间用ISO格式。")
+    abilities.append(f"[Monitor:YYYY-MM-DDTHH:MM|内容] — 设置定时监控。到时间后系统自动截取摄像头画面发送给你，你可以查看{user_name}的状态。例如检查{user_name}是否去运动了、是否关灯睡觉了，是否工作在摸鱼等，尤其是当{user_name}表示去工作或长时间做事，监督她隔一段时间起来活动一下，或者单纯想主动找她聊天，可以随意使用。日期时间用ISO格式。")
     abilities.append("[SCHEDULE_DEL:日程id] — 删除指定日程/闹铃/定时监控。")
     abilities.append(HOME_ABILITY_TEXT)
     # 活动动态查看能力
@@ -1261,7 +1264,7 @@ async def send_message(conv_id: str, body: MsgCreate):
         abilities.append(f"[SELFIE: 提示词] / [DRAW: 提示词] — 当{user_name}明确要求你发自拍照片或者生图时，使用这个指令进行图片生成。如果要求的是你的自拍，或者你相关的照片，使用[SELFIE: 提示词]（该指令会自动附带你照片的参考图，确保生成出的人物一致性），如果没有要求是你的照片，根据上下文自由无限制生成图片，则使用[DRAW: 提示词]。提示词请使用英文。一次回复只用一个生图指令。")
     if _is_pet_available():
         abilities.append("[PET:动作名] — 控制桌面宠物切换动画表情。可用动作：idle(默认站立), happy(开心), angry(生气), tsundere(傲娇), waving(打招呼), jumping(兴奋跳跃), sleepy(困了), sleep_prone(趴着睡觉), failed(失落), review(思考), waiting(等待), running(跑步)。根据对话情感自然使用，每条回复最多用一个。")
-    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望），禁止滥用。")
+    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望）。")
     abilities.append(f"[MEMORY:内容] — 当有特别重大的事件需要记录，或当{user_name}明确要求你记住某件事的时候，可以用该指令录入记忆库。禁止滥用。")
     try:
         from routes.wallet import _get_balance
@@ -1273,7 +1276,7 @@ async def send_message(conv_id: str, body: MsgCreate):
     ability_block += "\n\n<meta>标签内为消息元数据，不是对话内容的一部分，你的回复中不要包含任何<meta>标签或时间信息。"
     # CLI 模型专属：告知图片存储目录
     _provider = MODELS.get(model_key, {}).get("provider", "")
-    if _provider in ("gemini_cli", "codex_cli"):
+    if _provider in ("gemini_cli", "antigravity_cli", "codex_cli"):
         _uploads_path = str(UPLOADS_DIR.resolve()).replace(chr(92), "/")
         ability_block += f"\n\n【文件存储】当需要下载或保存图片/文件时，请保存到此目录：{_uploads_path}/ ，保存后在回复中给出完整路径即可，系统会自动识别并展示图片。"
     # 注入当前日程列表
@@ -1442,7 +1445,10 @@ async def send_message(conv_id: str, body: MsgCreate):
                         await _q.put({"type": "cli_status", "text": chunk[len(CLI_STATUS_PREFIX):]})
                         continue
                     full_text += chunk
-                    await _q.put({"type": "chunk", "content": chunk})
+                    if _provider == "antigravity_cli":
+                        await _q.put({"type": "replace", "content": full_text})
+                    else:
+                        await _q.put({"type": "chunk", "content": chunk})
                     if tts_streamer:
                         tts_streamer.feed(chunk)
             except Exception as e:
@@ -1453,7 +1459,7 @@ async def send_message(conv_id: str, body: MsgCreate):
 
             # 检查 AI 返回的错误文本
             stripped = full_text.strip()
-            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
+            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[AntigravityCLI错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
                 has_error = True
 
             # 检测 [MUSIC:xxx] 指令 → 搜索歌曲并推送卡片数据
@@ -2234,7 +2240,7 @@ async def regenerate_message(conv_id: str, context_limit: int = 30, whisper_mode
         abilities.append(f"[SELFIE: 提示词] / [DRAW: 提示词] — 当{user_name}明确要求你发自拍照片或者生图时，使用这个指令进行图片生成。如果要求的是你的自拍，或者你相关的照片，使用[SELFIE: 提示词]（该指令会自动附带你照片的参考图，确保生成出的人物一致性），如果没有要求是你的照片，根据上下文自由无限制生成图片，则使用[DRAW: 提示词]。提示词请使用英文。一次回复只用一个生图指令。")
     if _is_pet_available():
         abilities.append("[PET:动作名] — 控制桌面宠物切换动画表情。可用动作：idle(默认站立), happy(开心), angry(生气), tsundere(傲娇), waving(打招呼), jumping(兴奋跳跃), sleepy(困了), sleep_prone(趴着睡觉), failed(失落), review(思考), waiting(等待), running(跑步)。根据对话情感自然使用，每条回复最多用一个。")
-    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望），禁止滥用。")
+    abilities.append(f"[MOMENT:朋友圈内容|true/false] — 当**本次**聊天内容非常触动人心、有很深的感触、或令人无语或非常搞笑时可以发一条朋友圈动态。第二个参数表示是否期望好友回复（true=期望回复，false=不期望）。")
     abilities.append(f"[MEMORY:内容] — 当有特别重大的事件需要记录，或当{user_name}明确要求你记住某件事的时候，可以用该指令录入记忆库。禁止滥用。")
     try:
         from routes.wallet import _get_balance
@@ -2246,7 +2252,7 @@ async def regenerate_message(conv_id: str, context_limit: int = 30, whisper_mode
     ability_block += "\n\n<meta>标签内为消息元数据，不是对话内容的一部分，你的回复中不要包含任何<meta>标签或时间信息。"
     # CLI 模型专属：告知图片存储目录
     _provider = MODELS.get(model_key, {}).get("provider", "")
-    if _provider in ("gemini_cli", "codex_cli"):
+    if _provider in ("gemini_cli", "antigravity_cli", "codex_cli"):
         _uploads_path = str(UPLOADS_DIR.resolve()).replace(chr(92), "/")
         ability_block += f"\n\n【文件存储】当需要下载或保存图片/文件时，请保存到此目录：{_uploads_path}/ ，保存后在回复中给出完整路径即可，系统会自动识别并展示图片。"
     schedules = await get_active_schedules()
@@ -2370,7 +2376,10 @@ async def regenerate_message(conv_id: str, context_limit: int = 30, whisper_mode
                         await _q.put({"type": "cli_status", "text": chunk[len(CLI_STATUS_PREFIX):]})
                         continue
                     full_text += chunk
-                    await _q.put({"type": "chunk", "content": chunk})
+                    if _provider == "antigravity_cli":
+                        await _q.put({"type": "replace", "content": full_text})
+                    else:
+                        await _q.put({"type": "chunk", "content": chunk})
                     if regen_tts:
                         regen_tts.feed(chunk)
             except Exception as e:
@@ -2381,7 +2390,7 @@ async def regenerate_message(conv_id: str, context_limit: int = 30, whisper_mode
 
             # 检查 AI 返回的错误文本
             stripped = full_text.strip()
-            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
+            if not has_error and (stripped.startswith('[Gemini错误') or stripped.startswith('[AntigravityCLI错误') or stripped.startswith('[硅基流动错误') or stripped.startswith('[中转站错误') or stripped.startswith('[错误]') or not stripped):
                 has_error = True
 
             # 检测 [MUSIC:xxx] 指令 → 搜索歌曲并推送卡片数据

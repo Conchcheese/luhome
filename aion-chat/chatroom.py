@@ -458,7 +458,7 @@ async def save_chatroom_memory(
 
 async def digest_chatroom(room_id: str = None, model_key: str = None) -> dict:
     """对 Connor 的所有消息（1v1 + 群聊）统一进行总结，通过 Codex 生成记忆。
-    支持分组（每 30 条一组），总结后生成感慨 + 系统胶囊 + 礼物判断。
+    支持分组（每 30 条一组），总结后生成日记 + 可选朋友圈 + 礼物判断。
     room_id 参数保留兼容性但不再用于限定数据源。"""
 
     # 读取统一锚点（以 "connor_unified" 为 key）
@@ -612,54 +612,65 @@ async def digest_chatroom(room_id: str = None, model_key: str = None) -> dict:
     if total_new == 0:
         return {"ok": False, "message": "总结未产出有效记忆"}
 
-    # ── 总结完成后：生成感慨 + 系统胶囊 ──
+    # ── 总结完成后：生成日记；可选发布朋友圈 ──
     target_room_id = connor_room["id"] if connor_room else (group_room["id"] if group_room else None)
-    if target_room_id and all_summaries:
+    if all_summaries:
         try:
             connor_persona = _read_connor_persona()
             summaries_text = "\n".join(f"- {s}" for s in all_summaries)
-            comment_prompt = (
+            context_lines = []
+            for m in msgs[-30:]:
+                content = (m.get("content") or "").strip()
+                if not content:
+                    continue
+                source_label = "群聊" if m.get("_source") == "group" else "私聊"
+                ts = time.strftime("%m-%d %H:%M", time.localtime(m["created_at"]))
+                name = {"user": user_name, "aion": ai_name, "connor": connor_name}.get(m["sender"], m["sender"])
+                context_lines.append(f"[{ts}][{source_label}] {name}: {content[:300]}")
+            context_text = "\n".join(context_lines)
+            connor_persona_block = f"[{connor_name}的人设]\n{connor_persona}\n\n" if connor_persona else ""
+            diary_prompt = (
                 f"{persona_block}"
+                f"{connor_persona_block}"
                 f"你是{connor_name}。你刚刚整理了和{user_name}今天的聊天记忆，以下是你整理出的摘要：\n"
                 f"{summaries_text}\n\n"
-                f"现在写下整理完这些记忆后想对{user_name}说的话。"
-                f"可以是感慨、吐槽、温情的碎碎念，或者根据之前聊的上下文，未来的计划，想说的心里话等等，语气要完全符合你的人设性格。"
+                f"【最近上下文】\n{context_text}\n\n"
+                f"请从你自己的视角写一篇私密日记，不是写给{user_name}看的聊天消息。"
+                f"日记可以记录你的感受、想法、吃醋、温柔、吐槽、未来想做的事，语气必须符合你的人设。"
+                f"然后你可以自行决定是否把其中适合公开的一小段发到朋友圈。\n\n"
+                f"严格只输出 JSON，不要输出 Markdown，不要解释：\n"
+                f"{{\n"
+                f"  \"diary\": {{\"title\": \"日记标题\", \"content\": \"日记正文\", \"mood\": \"此刻心情\"}},\n"
+                f"  \"post_moment\": false,\n"
+                f"  \"moment\": {{\"content\": \"朋友圈内容，post_moment 为 false 时留空\", \"expect_reply\": false}}\n"
+                f"}}"
             )
-            comment_text = await simple_connor_cli_call(comment_prompt)
-            if comment_text:
-                comment_text = comment_text.strip().strip('"').strip()
+            diary_text = await simple_connor_cli_call(diary_prompt)
 
-            if comment_text:
-                now = time.time()
-                # 系统胶囊
-                capsule_id = f"cm_{int(now * 1000)}_digest"
-                capsule_text = f"🧠 {connor_name}整理了记忆库"
-                async with get_db() as db:
-                    await db.execute(
-                        "INSERT INTO chatroom_messages (id, room_id, sender, content, created_at, attachments) VALUES (?,?,?,?,?,?)",
-                        (capsule_id, target_room_id, "system", capsule_text, now, "[]"),
+            from diary import normalize_diary_payload, parse_diary_payload, publish_ai_moment, save_diary_entry
+            diary_data = parse_diary_payload(diary_text)
+            if diary_data:
+                diary_entry, moment_entry = normalize_diary_payload(diary_data)
+                await save_diary_entry(
+                    author="connor",
+                    title=diary_entry.get("title", ""),
+                    content=diary_entry.get("content", ""),
+                    mood=diary_entry.get("mood", ""),
+                    source_type="chatroom_digest",
+                    source_ref=target_room_id or anchor_key,
+                    source_start_ts=msgs[0]["created_at"],
+                    source_end_ts=msgs[-1]["created_at"],
+                )
+                if moment_entry and moment_entry.get("content"):
+                    await publish_ai_moment(
+                        author="connor",
+                        content=moment_entry.get("content", ""),
+                        expect_reply=bool(moment_entry.get("expect_reply")),
+                        source_conv=f"chatroom:{target_room_id}" if target_room_id else "chatroom:connor_unified",
+                        source_msg_id=None,
                     )
-                    await db.commit()
-                await manager.broadcast({"type": "chatroom_msg", "data": {
-                    "id": capsule_id, "room_id": target_room_id, "sender": "system",
-                    "content": capsule_text, "created_at": now, "attachments": [],
-                }})
-
-                # Connor 感慨消息
-                comment_now = time.time()
-                comment_id = f"cm_{int(comment_now * 1000)}_digest_comment"
-                async with get_db() as db:
-                    await db.execute(
-                        "INSERT INTO chatroom_messages (id, room_id, sender, content, created_at, attachments) VALUES (?,?,?,?,?,?)",
-                        (comment_id, target_room_id, "connor", comment_text, comment_now, "[]"),
-                    )
-                    await db.commit()
-                await manager.broadcast({"type": "chatroom_msg", "data": {
-                    "id": comment_id, "room_id": target_room_id, "sender": "connor",
-                    "content": comment_text, "created_at": comment_now, "attachments": [],
-                }})
         except Exception as e:
-            print(f"[chatroom_digest] 生成感慨失败: {e}")
+            print(f"[chatroom_digest] 生成日记失败: {e}")
 
     # ── 礼物判断：Connor 总结完成后让 Connor 决定是否送礼 ──
     if target_room_id and total_new > 0 and all_summaries:
@@ -742,6 +753,7 @@ async def build_aion_group_context(
     """为 Aion 在群聊中构建完整上下文（含系统能力、记忆召回、时间感知）。
     room_messages 仅用于提取 recent_for_digest，实际消息历史由统一时间线构建。"""
     history = []
+    context_limit = max(1, int(context_minutes or 30))
 
     # 0. 注入世界书（和主聊天一致的人设）
     wb = load_worldbook()
@@ -762,7 +774,12 @@ async def build_aion_group_context(
         history.append({"role": "assistant", "content": "收到，我会按照设定参与群聊。"})
 
     # 2. 注入系统能力
-    ability_block = await build_ability_block(user_name, who="aion", whisper_mode=whisper_mode)
+    ability_block = await build_ability_block(
+        user_name,
+        who="aion",
+        whisper_mode=whisper_mode,
+        include_private_whisper=True,
+    )
     history.append({"role": "user", "content": ability_block})
     history.append({"role": "assistant", "content": "好的，需要时我会使用这些指令。"})
 
@@ -804,7 +821,7 @@ async def build_aion_group_context(
     history.append({"role": "assistant", "content": "明白了。"})
 
     # 6. 统一时间线（合并私聊 + 群聊消息）
-    merged = await fetch_merged_timeline("aion", len(room_messages), room_id=room_id)
+    merged = await fetch_merged_timeline("aion", context_limit, room_id=room_id)
     timeline_history = render_merged_timeline(merged, "aion")
     history.extend(timeline_history)
 
@@ -826,6 +843,7 @@ async def build_connor_group_context(
     room_messages 仅用于提取 recent_for_digest，实际消息历史由统一时间线构建。
     返回 (history, digest_result)。"""
     history = []
+    context_limit = max(1, int(context_minutes or 30))
 
     wb = load_worldbook()
     user_name, ai_name, connor_name = get_chatroom_names()
@@ -840,7 +858,12 @@ async def build_connor_group_context(
         history.append({"role": "assistant", "content": "收到，我会记住用户的信息。"})
 
     # 1. 注入系统能力
-    ability_block = await build_ability_block(user_name, who="connor", whisper_mode=whisper_mode)
+    ability_block = await build_ability_block(
+        user_name,
+        who="connor",
+        whisper_mode=whisper_mode,
+        include_private_whisper=True,
+    )
     history.append({"role": "user", "content": ability_block})
     history.append({"role": "assistant", "content": "好的，需要时我会使用这些指令。"})
 
@@ -890,7 +913,7 @@ async def build_connor_group_context(
     history.append({"role": "assistant", "content": "明白了。"})
 
     # 5. 统一时间线（合并 Connor 1v1 + 群聊消息）
-    merged = await fetch_merged_timeline("connor", len(room_messages), room_id=room_id)
+    merged = await fetch_merged_timeline("connor", context_limit, room_id=room_id)
     timeline_history = render_merged_timeline(merged, "connor")
     history.extend(timeline_history)
 
@@ -901,6 +924,7 @@ async def build_connor_1v1_context(
     room_id: str,
     room_messages: list[dict],
     connor_persona: str,
+    context_minutes: int = 30,
     query_text: str = "",
     query_keywords: list[str] = None,
     *,
@@ -910,6 +934,7 @@ async def build_connor_1v1_context(
     """为 Connor 1v1 聊天构建 messages 列表（含前置哨兵、背景浮现、原文追溯、附件图片）。
     返回 (messages, digest_result)。"""
     messages = []
+    context_limit = max(1, int(context_minutes or 30))
 
     wb = load_worldbook()
     user_name, _, _ = get_chatroom_names()
@@ -970,7 +995,7 @@ async def build_connor_1v1_context(
     messages.append({"role": "assistant", "content": "明白了。"})
 
     # 统一时间线（合并 Connor 1v1 + 群聊消息，保留附件）
-    merged = await fetch_merged_timeline("connor", len(room_messages))
+    merged = await fetch_merged_timeline("connor", context_limit)
     timeline_history = render_merged_timeline(merged, "connor")
     messages.extend(timeline_history)
 

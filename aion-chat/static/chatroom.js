@@ -61,10 +61,148 @@ function playRecv() { sndRecv.currentTime = 0; sndRecv.play().catch(() => {}); }
 let crTtsEnabled = false;
 let crTtsAionVoice = '';
 let crTtsConnorVoice = '';
-let crTtsAudio = new Audio();
-let crTtsPlaying = false;
-let crTtsChunkQueues = {}; // { msgId: { nextPlay: 0, chunks: {seq: url}, finished: bool } }
-let crTtsPlayOrder = [];   // msgId 按到达顺序排列
+const crSeenTTSChunks = new Set();
+const crSeenTTSDone = new Set();
+const crIsEmbedded = (() => {
+  try { return window.parent && window.parent !== window; }
+  catch(e) { return false; }
+})();
+
+// TTS 播放引擎：Audio 使用本地对象（可靠播放），离开页面时移交给 parent（尽力续播）
+const _ttsEngine = (function() {
+  // 在 parent 上预建一个 handoff audio，用于离开页面后续播当前片段
+  let _handoffAudio = null;
+  try {
+    if (window.parent && window.parent !== window) {
+      if (!window.parent._crTtsHandoffAudio) {
+        const a = window.parent.document.createElement('audio');
+        a.style.display = 'none';
+        window.parent.document.body.appendChild(a);
+        window.parent._crTtsHandoffAudio = a;
+      }
+      _handoffAudio = window.parent._crTtsHandoffAudio;
+    }
+  } catch(e) {}
+
+  const audio = new Audio(); // 本地 Audio，可靠播放
+  let _cbId = 0; // 回调去重 ID，防止 onended/onerror/catch 多次触发
+  let _resumeTimer = null;
+  let _stopRequested = false;
+
+  const clearResumeTimer = () => {
+    if (_resumeTimer) {
+      clearTimeout(_resumeTimer);
+      _resumeTimer = null;
+    }
+  };
+
+  const scheduleResume = () => {
+    if (_stopRequested || !eng.playing || !eng.audio.src || eng.audio.ended || !eng.audio.paused) return;
+    if (_resumeTimer) return;
+    _resumeTimer = setTimeout(() => {
+      _resumeTimer = null;
+      if (_stopRequested || !eng.playing || !eng.audio.src || eng.audio.ended || !eng.audio.paused) return;
+      eng.audio.play().catch(() => {
+        scheduleResume();
+      });
+    }, 1500);
+  };
+
+  const eng = {
+    audio: audio,
+    playing: false,
+    chunkQueues: {},
+    playOrder: [],
+    _next() {
+      while (eng.playOrder.length > 0) {
+        const msgId = eng.playOrder[0];
+        const q = eng.chunkQueues[msgId];
+        if (!q) { eng.playOrder.shift(); continue; }
+        let url = q.chunks[q.nextPlay];
+        if (url === undefined) {
+          if (q.finished) {
+            const maxSeq = Object.keys(q.chunks).length > 0 ? Math.max(...Object.keys(q.chunks).map(Number)) : -1;
+            if (q.nextPlay > maxSeq) { eng.playOrder.shift(); delete eng.chunkQueues[msgId]; continue; }
+            while (q.nextPlay <= maxSeq && q.chunks[q.nextPlay] === undefined) q.nextPlay++;
+            if (q.nextPlay > maxSeq) { eng.playOrder.shift(); delete eng.chunkQueues[msgId]; continue; }
+            url = q.chunks[q.nextPlay];
+          }
+          if (url === undefined) { eng.playing = false; return; }
+        }
+        eng.playing = true;
+        _stopRequested = false;
+        clearResumeTimer();
+        const myId = ++_cbId;
+        const advance = () => {
+          if (myId !== _cbId) return; // 过时回调，忽略
+          clearResumeTimer();
+          _cbId++;
+          eng.playing = false;
+          q.nextPlay++;
+          eng._next();
+        };
+        eng.audio.src = url;
+        eng.audio.onended = advance;
+        eng.audio.onerror = advance;
+        eng.audio.onplaying = clearResumeTimer;
+        eng.audio.onpause = () => {
+          if (myId !== _cbId || eng.audio.ended) return;
+          scheduleResume();
+        };
+        eng.audio.play().catch(() => {
+          // 外部 App 抢占音频焦点时，play() 可能会短暂失败；保留当前分片，等待焦点恢复。
+          scheduleResume();
+        });
+        return;
+      }
+      eng.playing = false;
+    },
+    enqueue(msgId, seq, url) {
+      if (!eng.chunkQueues[msgId]) {
+        eng.chunkQueues[msgId] = { nextPlay: 0, chunks: {}, finished: false };
+        eng.playOrder.push(msgId);
+      }
+      eng.chunkQueues[msgId].chunks[seq] = url;
+      if (!eng.playing) eng._next();
+    },
+    finish(msgId) {
+      const q = eng.chunkQueues[msgId];
+      if (!q) return;
+      q.finished = true;
+      while (eng.playOrder.length > 0) {
+        const id = eng.playOrder[0];
+        const qq = eng.chunkQueues[id];
+        if (!qq || !qq.finished) break;
+        const maxSeq = Object.keys(qq.chunks).length > 0 ? Math.max(...Object.keys(qq.chunks).map(Number)) : -1;
+        if (qq.nextPlay > maxSeq) { eng.playOrder.shift(); delete eng.chunkQueues[id]; } else break;
+      }
+      if (!eng.playing) eng._next();
+    },
+    stop() {
+      _cbId++;
+      _stopRequested = true;
+      clearResumeTimer();
+      eng.audio.pause(); eng.audio.src = '';
+      eng.chunkQueues = {}; eng.playOrder = []; eng.playing = false;
+    }
+  };
+
+  // 页面卸载时，把当前正在播放的音频移交到 parent audio 续播
+  if (_handoffAudio && !crIsEmbedded) {
+    window.addEventListener('pagehide', () => {
+      if (eng.playing && eng.audio.src && !eng.audio.paused) {
+        try {
+          _handoffAudio.src = eng.audio.src;
+          _handoffAudio.currentTime = eng.audio.currentTime;
+          _handoffAudio.play().catch(() => {});
+        } catch(e) {}
+      }
+    });
+  }
+
+  return eng;
+})();
+let crTtsAudio = _ttsEngine.audio;
 
 // ── 音乐卡片 ──
 let crMusicCards = {}; // { msgId: [{ id, name, artist, album, cover, audio_url, candidates }] }
@@ -206,73 +344,26 @@ function crPlayMusicOnline(songId) {
 
 function crEnqueueTTSChunk(msgId, seq, url) {
   if (!crTtsEnabled) return;
-  if (!crTtsChunkQueues[msgId]) {
-    crTtsChunkQueues[msgId] = { nextPlay: 0, chunks: {}, finished: false };
-    crTtsPlayOrder.push(msgId);
-  }
-  crTtsChunkQueues[msgId].chunks[seq] = url;
-  if (!crTtsPlaying) crPlayNextTTSChunk();
+  const key = `${msgId}:${seq}`;
+  if (crSeenTTSChunks.has(key)) return;
+  crSeenTTSChunks.add(key);
+  if (crIsEmbedded) return;
+  _ttsEngine.enqueue(msgId, seq, url);
 }
 
 async function crPlayNextTTSChunk() {
-  if (!crTtsEnabled) { crTtsPlaying = false; return; }
-  while (crTtsPlayOrder.length > 0) {
-    const msgId = crTtsPlayOrder[0];
-    const q = crTtsChunkQueues[msgId];
-    if (!q) { crTtsPlayOrder.shift(); continue; }
-    const nextSeq = q.nextPlay;
-    const url = q.chunks[nextSeq];
-    if (url === undefined) {
-      if (q.finished) {
-        const maxSeq = Object.keys(q.chunks).length > 0 ? Math.max(...Object.keys(q.chunks).map(Number)) : -1;
-        if (nextSeq > maxSeq) {
-          crTtsPlayOrder.shift();
-          delete crTtsChunkQueues[msgId];
-          continue;
-        }
-      }
-      crTtsPlaying = false;
-      return;
-    }
-    crTtsPlaying = true;
-    try {
-      crTtsAudio.src = url;
-      crTtsAudio.onended = () => { crTtsPlaying = false; q.nextPlay++; crPlayNextTTSChunk(); };
-      crTtsAudio.onerror = () => { crTtsPlaying = false; q.nextPlay++; crPlayNextTTSChunk(); };
-      await crTtsAudio.play().catch(() => { crTtsPlaying = false; q.nextPlay++; crPlayNextTTSChunk(); });
-      return;
-    } catch(e) {
-      crTtsPlaying = false;
-      q.nextPlay++;
-    }
-  }
-  crTtsPlaying = false;
+  if (!_ttsEngine.playing) _ttsEngine._next();
 }
 
 function crFinishTTSForMsg(msgId) {
-  const q = crTtsChunkQueues[msgId];
-  if (!q) return;
-  q.finished = true;
-  // 尝试清理已播完的
-  while (crTtsPlayOrder.length > 0) {
-    const id = crTtsPlayOrder[0];
-    const qq = crTtsChunkQueues[id];
-    if (!qq || !qq.finished) break;
-    const maxSeq = Object.keys(qq.chunks).length > 0 ? Math.max(...Object.keys(qq.chunks).map(Number)) : -1;
-    if (qq.nextPlay > maxSeq) {
-      crTtsPlayOrder.shift();
-      delete crTtsChunkQueues[id];
-    } else break;
-  }
-  if (!crTtsPlaying) crPlayNextTTSChunk();
+  if (crSeenTTSDone.has(msgId)) return;
+  crSeenTTSDone.add(msgId);
+  if (crIsEmbedded) return;
+  _ttsEngine.finish(msgId);
 }
 
 function crStopTTS() {
-  crTtsAudio.pause();
-  crTtsAudio.src = '';
-  crTtsChunkQueues = {};
-  crTtsPlayOrder = [];
-  crTtsPlaying = false;
+  _ttsEngine.stop();
 }
 
 // ── TTS 重听 ──
@@ -290,12 +381,19 @@ async function crReplayTTS(msgId) {
   crReplayAudio.pause(); crReplayChunks = [];
   document.querySelectorAll('.tts-replay-btn.playing').forEach(b => b.classList.remove('playing'));
 
-  // 先尝试分段音频
+  // 先尝试分段音频；允许中间偶发缺段，不让后续分段被挡住
   let chunks = [];
-  for (let i = 0; i < 50; i++) {
+  let misses = 0;
+  for (let i = 0; i < 120; i++) {
     const resp = await fetch(`/api/tts/audio/${msgId}_s${i}`, { method: 'HEAD' });
-    if (!resp.ok) break;
-    chunks.push(`/api/tts/audio/${msgId}_s${i}`);
+    if (resp.ok) {
+      chunks.push(`/api/tts/audio/${msgId}_s${i}`);
+      misses = 0;
+    } else if (chunks.length > 0 && ++misses >= 8) {
+      break;
+    } else if (chunks.length === 0 && i >= 8) {
+      break;
+    }
   }
 
   // 降级：单文件
@@ -366,6 +464,11 @@ async function crLoadTTSVoices() {
 // ── DOM ──
 const roomListEl = document.getElementById('roomList');
 const messagesEl = document.getElementById('messages');
+
+// ── 消息分页状态 ──
+let oldestMsgTs = null;   // 当前已加载的最早消息时间戳
+let noMoreMessages = false; // 是否已加载全部历史
+let loadingOlder = false; // 防重复加载锁
 const composer = document.getElementById('composer');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
@@ -389,7 +492,14 @@ function toast(msg, ms = 2000) {
 }
 
 function timeStr(ts) {
-  return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const d = new Date(ts * 1000);
+  const now = new Date();
+  const diffMs = now - d;
+  const time = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (diffMs > 12 * 60 * 60 * 1000) {
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate() + ' ' + time;
+  }
+  return time;
 }
 
 function isNearBottom() {
@@ -401,6 +511,13 @@ function scrollToBottom(force = false) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 }
+
+// 滚动到顶部时自动加载更早的消息
+messagesEl.addEventListener('scroll', () => {
+  if (messagesEl.scrollTop < 80) {
+    loadOlderMessages();
+  }
+});
 
 function resizeInput() {
   inputEl.style.height = 'auto';
@@ -528,9 +645,44 @@ async function selectRoom(roomId) {
 
 async function loadMessages() {
   if (!currentRoom) return;
+  oldestMsgTs = null;
+  noMoreMessages = false;
+  loadingOlder = false;
   const msgs = await api(`/rooms/${currentRoom.id}/messages?limit=100`);
+  if (msgs && msgs.length) {
+    oldestMsgTs = msgs[0].created_at;
+    noMoreMessages = msgs.length < 100;
+  } else {
+    noMoreMessages = true;
+  }
   renderMessages(msgs);
   scrollToBottom(true);
+}
+
+async function loadOlderMessages() {
+  if (!currentRoom || noMoreMessages || loadingOlder || !oldestMsgTs) return;
+  loadingOlder = true;
+  // 记住当前滚动高度以便加载后保持位置
+  const prevHeight = messagesEl.scrollHeight;
+  const msgs = await api(`/rooms/${currentRoom.id}/messages?limit=50&before=${oldestMsgTs}`);
+  if (!msgs || !msgs.length) {
+    noMoreMessages = true;
+    loadingOlder = false;
+    return;
+  }
+  if (msgs.length < 50) noMoreMessages = true;
+  oldestMsgTs = msgs[0].created_at;
+  // 将旧消息插入到顶部
+  const fragment = document.createDocumentFragment();
+  msgs.forEach(m => {
+    const div = document.createElement('div');
+    div.innerHTML = msgHTML(m);
+    fragment.appendChild(div.firstElementChild);
+  });
+  messagesEl.prepend(fragment);
+  // 保持滚动位置
+  messagesEl.scrollTop = messagesEl.scrollHeight - prevHeight;
+  loadingOlder = false;
 }
 
 function renderMessages(msgs) {
@@ -570,7 +722,7 @@ function msgHTML(m) {
   let bubblesHtml = '';
   if (!isVoiceOnly) {
     // 转账标签前后强制换行，确保卡片独占一个气泡
-    const splitRaw = raw.replace(/(\[转账[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n$1\n');
+    const splitRaw = raw.replace(/(\[转账(?:给[^\uff1a:]+?)?[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n$1\n');
     const parts = splitRaw.split(isUser ? /\n+/ : /\n{2,}/).filter(p => p.trim());
     if (parts.length > 1) {
       bubblesHtml = '<div class="bubbles">' + parts.map(p => `<div class="bubble">${fmt(p)}</div>`).join('') + '</div>';
@@ -734,7 +886,7 @@ function endStreamingBubble(attachments) {
   // 流结束后，按双换行拆分成多个气泡，并解析 [[image:...]] 和转账卡片
   if (streamingBubble && streamingText) {
     // 转账标签前后强制换行，确保卡片独占一个气泡
-    const splitText = streamingText.replace(/(\[转账[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n\n$1\n\n');
+    const splitText = streamingText.replace(/(\[转账(?:给[^\uff1a:]+?)?[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n\n$1\n\n');
     const parts = splitText.split(/\n{2,}/).filter(p => p.trim());
     if (parts.length > 1) {
       const parent = streamingBubble.parentElement;
@@ -1018,7 +1170,7 @@ async function openSettings() {
   document.getElementById('setAionPersona').value = room.aion_persona || '';
   document.getElementById('setConnorPersona').value = room.connor_persona || '';
   document.getElementById('setContextMin').value = room.context_minutes || 30;
-  document.getElementById('setAiRounds').value = room.ai_chat_rounds || 3;
+  document.getElementById('setAiRounds').value = room.ai_chat_rounds || 1;
   document.getElementById('setConnorName').value = cfg.connor_name || 'Connor';
 
   // 回复顺序选项：用世界书和配置中的名字
@@ -1050,7 +1202,7 @@ async function saveSettings() {
       aion_persona: document.getElementById('setAionPersona').value,
       connor_persona: document.getElementById('setConnorPersona').value,
       context_minutes: parseInt(document.getElementById('setContextMin').value) || 30,
-      ai_chat_rounds: parseInt(document.getElementById('setAiRounds').value) || 3,
+      ai_chat_rounds: parseInt(document.getElementById('setAiRounds').value) || 1,
     }),
   });
 
@@ -1274,6 +1426,10 @@ function goHome() {
   window.location.href = '/';
 }
 
+function crOpenDiary() {
+  window.location.href = '/diary';
+}
+
 function renderEmptyChat() {
   roomTitleEl.textContent = '聊天室';
   composer.style.display = 'none';
@@ -1301,6 +1457,14 @@ function connectWS() {
     try {
       const data = JSON.parse(e.data);
       if (data.type === 'pong') return;
+
+      if (data.type === 'tts_chunk' && data.data) {
+        crEnqueueTTSChunk(data.data.msg_id, data.data.seq, data.data.url);
+      }
+
+      if (data.type === 'tts_done' && data.data) {
+        crFinishTTSForMsg(data.data.msg_id);
+      }
 
       if (data.type === 'chatroom_msg_created' && currentRoom) {
         const msg = data.data;
@@ -1478,17 +1642,19 @@ function esc(str) {
   return div.innerHTML;
 }
 
-/** 渲染 [转账：N元] 为微信风格转账卡片 */
+/** 渲染 [转账给XXX：N元] 或 [转账：N元] 为微信风格转账卡片 */
 function renderTransferCards(html) {
-  const transferRe = /\[\u8f6c\u8d26[\uff1a:]\s*(-?\d+(?:\.\d+)?)\s*\u5143\]/g;
-  return html.replace(transferRe, (match, amount) => {
+  const transferRe = /\[\u8f6c\u8d26(?:\u7ed9([^\uff1a:]+?))?[\uff1a:]\s*(-?\d+(?:\.\d+)?)\s*\u5143\]/g;
+  return html.replace(transferRe, (match, recipient, amount) => {
     const val = parseFloat(amount);
     const isNeg = val < 0;
     const absVal = Math.abs(val);
+    const targetName = recipient ? recipient.trim() : '';
     if (isNeg) {
-      return `<div class="transfer-card deduct"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><line x1="14" y1="14" x2="26" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="14" x2="14" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">钱包扣除</div></div><div class="transfer-card-footer">扣除</div></div>`;
+      return `<div class="transfer-card deduct"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><line x1="14" y1="14" x2="26" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="14" x2="14" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">钱包扣除${targetName ? '（' + targetName + '）' : ''}</div></div><div class="transfer-card-footer">扣除</div></div>`;
     } else {
-      return `<div class="transfer-card"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M12 17h12M24 17l-3-3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M28 23H16M16 23l3 3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">发起了一笔转账</div></div><div class="transfer-card-footer">转账</div></div>`;
+      const descText = targetName ? `转账给${targetName}` : '发起了一笔转账';
+      return `<div class="transfer-card"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M12 17h12M24 17l-3-3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M28 23H16M16 23l3 3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">${descText}</div></div><div class="transfer-card-footer">转账</div></div>`;
     }
   });
 }
@@ -2142,11 +2308,26 @@ function crCloseWhisper() { document.getElementById('crWhisperModal').classList.
 //  Connor 钱包
 // ══════════════════════════════════════════════════
 
+let crTransferTarget = 'connor'; // 'connor' | 'aion'
+
 function crOpenTransferDialog() {
+  crTransferTarget = 'connor';
+  document.getElementById('crTransferTargetConnor').textContent = crConnorName;
+  document.getElementById('crTransferTargetAion').textContent = crAiName;
+  document.getElementById('crTransferTargetConnor').classList.add('active');
+  document.getElementById('crTransferTargetAion').classList.remove('active');
   document.getElementById('crTransferDialogTitle').textContent = `给【${crConnorName}】转账`;
   document.getElementById('crTransferAmountInput').value = '';
   document.getElementById('crTransferDialogOverlay').classList.add('show');
   setTimeout(() => document.getElementById('crTransferAmountInput').focus(), 100);
+}
+
+function crSwitchTransferTarget(target) {
+  crTransferTarget = target;
+  const name = target === 'aion' ? crAiName : crConnorName;
+  document.getElementById('crTransferDialogTitle').textContent = `给【${name}】转账`;
+  document.getElementById('crTransferTargetConnor').classList.toggle('active', target === 'connor');
+  document.getElementById('crTransferTargetAion').classList.toggle('active', target === 'aion');
 }
 
 function crCloseTransferDialog() {
@@ -2157,7 +2338,8 @@ function crConfirmTransfer() {
   const val = document.getElementById('crTransferAmountInput').value.trim();
   if (!val || isNaN(Number(val)) || Number(val) === 0) return;
   const n = Number(val);
-  const tag = `[转账：${n}元]`;
+  const targetName = crTransferTarget === 'aion' ? crAiName : crConnorName;
+  const tag = `[转账给${targetName}：${n}元]`;
   const cur = inputEl.value;
   inputEl.value = cur ? cur + ' ' + tag : tag;
   resizeInput();

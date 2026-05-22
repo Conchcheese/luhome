@@ -6,6 +6,7 @@ import json, base64, mimetypes, asyncio, shutil, subprocess, os, re
 from pathlib import Path
 
 import httpx
+import tempfile
 
 from config import get_key, MODELS, UPLOADS_DIR, CODEX_UPLOADS_DIR, load_worldbook, SETTINGS
 
@@ -27,6 +28,7 @@ _GEMINI_CLI_NOISE_PATTERNS = [
     re.compile(r'^.*CRITICAL INSTRUCTION\s*\d+\s*:.*$', re.IGNORECASE | re.MULTILINE),
     re.compile(r'^.*Currently no further tools are needed.*$', re.IGNORECASE | re.MULTILINE),
 ]
+_LEADING_CLI_ROLE_HEADER_RE = re.compile(r'^\s*\[(?:Assistant|Model|AI|Aion)\]\s*', re.IGNORECASE)
 
 
 def _strip_gemini_cli_noise(text: str) -> str:
@@ -36,6 +38,7 @@ def _strip_gemini_cli_noise(text: str) -> str:
     cleaned = text
     for pat in _GEMINI_CLI_NOISE_PATTERNS:
         cleaned = pat.sub('', cleaned)
+    cleaned = _LEADING_CLI_ROLE_HEADER_RE.sub('', cleaned, count=1)
     # 去除被裁出来后可能剩下的多余空行
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     return cleaned.strip()
@@ -403,6 +406,186 @@ def _find_gemini_script() -> str | None:
 
 _GEMINI_SCRIPT: str | None = _find_gemini_script()
 
+def _find_antigravity_binary() -> str | None:
+    """定位 Antigravity CLI 的 agy 可执行文件。"""
+    agy_bin = shutil.which("agy") or shutil.which("agy.exe")
+    if agy_bin:
+        return agy_bin
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        candidate = Path(local_appdata) / "agy" / "bin" / "agy.exe"
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+_ANTIGRAVITY_BINARY: str | None = _find_antigravity_binary()
+_ANTIGRAVITY_WORKSPACE: str = str(Path(__file__).parent.parent)
+
+def _summarize_antigravity_log(log_path: Path | None) -> str:
+    if not log_path or not log_path.exists():
+        return ""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    if "You are not logged into Antigravity" in text:
+        return "Antigravity CLI 还没有完成登录。请先在终端运行 agy，选 Google OAuth 完成 CLI 登录，再回到 AionsHome 重试。"
+    if "A required privilege is not held by the client" in text and "symlink" in text:
+        return "Antigravity CLI 创建项目配置软链接失败。可以用管理员 PowerShell 运行 agy 完成一次初始化，或开启 Windows 开发者模式后再试。"
+    if "failed to get model config" in text or "FetchAvailableModels" in text:
+        return "Antigravity CLI 没拿到可用模型配置，通常是 CLI 登录状态或网络代理还没通。"
+    lines = [ln for ln in text.splitlines() if " E" in ln or " W" in ln or "error" in ln.lower() or "failed" in ln.lower()]
+    if lines:
+        return lines[-1][-500:]
+    return ""
+
+def _ps_single_quote(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+def _deduplicate_cjk(text: str) -> str:
+    """修复 Windows PowerShell 5.1 Start-Transcript 捕获双字节/CJK 字符时
+    每个字符被重复两遍的 bug（如 '收收到到' 还原为 '收到收到'）。
+    """
+    if not text:
+        return text
+    result = []
+    i = 0
+    n = len(text)
+    while i < n:
+        char = text[i]
+        if ord(char) > 127:
+            if i + 1 < n and text[i + 1] == char:
+                result.append(char)
+                i += 2
+                continue
+        result.append(char)
+        i += 1
+    return "".join(result)
+
+def _extract_antigravity_transcript_output(transcript_path: Path | None) -> str:
+    if not transcript_path or not transcript_path.exists():
+        return ""
+    try:
+        text = transcript_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+    marker = "**********************"
+    parts = text.split(marker)
+    # Start-Transcript 输出形如：marker + header + marker + command output + marker + footer + marker
+    if len(parts) >= 4:
+        body = parts[2]
+    else:
+        body = text
+
+    drop_prefixes = (
+        "Windows PowerShell transcript",
+        "Start time:",
+        "End time:",
+        "Username:",
+        "RunAs User:",
+        "Configuration Name:",
+        "Machine:",
+        "Host Application:",
+        "Process ID:",
+        "PSVersion:",
+        "PSEdition:",
+        "PSCompatibleVersions:",
+        "BuildVersion:",
+        "CLRVersion:",
+        "WSManStackVersion:",
+        "PSRemotingProtocolVersion:",
+        "SerializationVersion:",
+    )
+    kept = []
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped == marker:
+            continue
+        if any(stripped.startswith(p) for p in drop_prefixes):
+            continue
+        kept.append(line.rstrip())
+    return "\n".join(kept).strip()
+
+def _is_antigravity_auth_prompt(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        "authentication required" in lowered
+        or "waiting for authentication" in lowered
+        or "authorization code" in lowered
+        or "not logged into antigravity" in lowered
+        or "accounts.google.com/o/oauth2" in lowered
+    )
+
+async def _run_antigravity_print(
+    agy_bin: str,
+    base_args: list[str],
+    prompt: str,
+    log_dir: Path,
+    *,
+    timeout: str,
+    prefix: str,
+    cwd: str | None = None,
+) -> tuple[int | None, str, str]:
+    """Run `agy --print` through PowerShell transcript capture.
+
+    On Windows, agy 1.0.0 writes print output to the console buffer instead of
+    reliable stdout/stderr pipes, so transcript capture is the least invasive
+    bridge for this experimental provider.
+    """
+    transcript_file = None
+    script_file = None
+    try:
+        fd_tr, transcript_file = tempfile.mkstemp(prefix=f"{prefix}_transcript_", suffix=".txt", dir=log_dir)
+        os.close(fd_tr)
+        fd_script, script_file = tempfile.mkstemp(prefix=f"run_{prefix}_", suffix=".ps1", dir=log_dir)
+        os.close(fd_script)
+
+        prompt_b64 = base64.b64encode(prompt.encode("utf-8")).decode("ascii")
+        args_before_prompt = base_args + ["--print"]
+        args_literal = "@(" + ",".join(_ps_single_quote(arg) for arg in args_before_prompt) + ",$prompt,'--print-timeout'," + _ps_single_quote(timeout) + ")"
+        script_text = (
+            "$ErrorActionPreference = 'Continue'\n"
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+            "$OutputEncoding = [System.Text.Encoding]::UTF8\n"
+            "$env:NO_COLOR = '1'\n"
+            f"$prompt = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String({_ps_single_quote(prompt_b64)}))\n"
+            f"$agyArgs = {args_literal}\n"
+            f"Start-Transcript -Path {_ps_single_quote(transcript_file)} -Force | Out-Null\n"
+            f"& {_ps_single_quote(agy_bin)} @agyArgs\n"
+            "$exitCode = $LASTEXITCODE\n"
+            "Stop-Transcript | Out-Null\n"
+            "exit $exitCode\n"
+        )
+        Path(script_file).write_text(script_text, encoding="utf-8")
+
+        env = {**os.environ, "NO_COLOR": "1"}
+        proc = await asyncio.create_subprocess_exec(
+            "powershell",
+            "-ExecutionPolicy", "Bypass",
+            "-File", script_file,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            cwd=cwd,
+            limit=8 * 1024 * 1024,
+        )
+        stdout, stderr = await proc.communicate()
+        out = stdout.decode("utf-8", errors="replace").strip()
+        err = stderr.decode("utf-8", errors="replace").strip()
+        captured = _extract_antigravity_transcript_output(Path(transcript_file))
+        
+        # Deduplicate CJK characters to resolve PowerShell transcription duplication
+        clean_out = _deduplicate_cjk(out)
+        clean_captured = _deduplicate_cjk(captured)
+        return proc.returncode, (clean_out or clean_captured).strip(), err
+    finally:
+        if script_file:
+            try:
+                Path(script_file).unlink(missing_ok=True)
+            except Exception:
+                pass
+
 def _build_cli_prompt(messages: list, *, copy_cr_uploads: bool = False) -> str:
     """将 messages 列表拼成供 CLI stdin 使用的完整 prompt。
     图片/音频附件转为本地绝对路径，由 CLI 自行读取文件（避免 base64 超长）。
@@ -718,6 +901,104 @@ async def call_gemini_cli(messages: list, model: str, meta: dict | None = None,
         yield f"[GeminiCLI错误] {e}"
 
 
+# ── Antigravity CLI ───────────────────────────────
+async def call_antigravity_cli(messages: list, model: str, meta: dict | None = None,
+                               temperature: float | None = None, max_tokens: int | None = None):
+    """通过 Antigravity CLI(agy) 非交互 print 模式获取响应。
+
+    当前 agy 1.0.0 暴露的是 --print 文本输出模式，暂未暴露 Gemini CLI 的
+    -o stream-json / -m 等价参数，所以这里先作为新增管线接入：保留旧 Gemini CLI，
+    Antigravity 的模型选择依赖 agy/Antigravity 自己的 /model 或 settings。
+    """
+    agy_bin = _find_antigravity_binary()
+    if not agy_bin:
+        yield "[AntigravityCLI错误] 未找到 agy CLI，请先运行 irm https://antigravity.google/cli/install.ps1 | iex"
+        return
+
+    prompt = _build_cli_prompt(messages, copy_cr_uploads=True)
+    if model:
+        prompt = (
+            "[System Instruction]\n"
+            f"Aion Chat 本次选择的 Antigravity 目标模型是：{model}。"
+            "如果当前 Antigravity CLI 会话支持该模型，请使用它；不要在回复里提及这条内部路由说明。\n\n"
+            f"{prompt}"
+        )
+
+    # Keep the experimental chat path close to the command that works in a
+    # normal user terminal. Adding the workspace can trigger extra AGY project
+    # initialization/auth flows, which is useful for coding agents but brittle
+    # for casual chat.
+    cmd = [
+        agy_bin,
+        "--log-file",
+        "",
+    ]
+    if SETTINGS.get("gemini_cli_tools_enabled", False):
+        cmd.append("--dangerously-skip-permissions")
+
+    log_file = None
+    try:
+        log_dir = Path(__file__).parent / "data" / "cli_debug"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        fd_log, log_file = tempfile.mkstemp(prefix="antigravity_", suffix=".log", dir=log_dir)
+        os.close(fd_log)
+        cmd[cmd.index("--log-file") + 1] = log_file
+
+        yield f"{CLI_STATUS_PREFIX}🔐 检查 Antigravity CLI 登录状态…"
+        check_code, check_out, check_err = await _run_antigravity_print(
+            agy_bin,
+            cmd[1:],
+            "请只回复 OK",
+            log_dir,
+            timeout="2m",
+            prefix="antigravity_check",
+            cwd=_ANTIGRAVITY_WORKSPACE,
+        )
+        check_text = "\n".join(part for part in (check_out, check_err) if part)
+        if check_code and check_code != 0:
+            detail = _summarize_antigravity_log(Path(log_file) if log_file else None) or check_text[:300]
+            yield f"[AntigravityCLI错误] 登录预检失败。请先在 PowerShell 里运行 agy 完成 Google OAuth 登录，再回到 AionsHome 重试。{(' ' + detail) if detail else ''}"
+            return
+        if _is_antigravity_auth_prompt(check_text):
+            yield "[AntigravityCLI错误] Antigravity CLI 正在要求重新登录。请先在 PowerShell 里运行 agy，完成 Google OAuth 后再回到 AionsHome 重试。"
+            return
+        if not check_out:
+            detail = _summarize_antigravity_log(Path(log_file) if log_file else None)
+            yield f"[AntigravityCLI错误] 登录预检没有收到 AGY 回复{('：' + detail) if detail else ''}"
+            return
+
+        yield f"{CLI_STATUS_PREFIX}🚀 Antigravity CLI 正在生成…"
+        code, out, err = await _run_antigravity_print(
+            agy_bin,
+            cmd[1:],
+            prompt,
+            log_dir,
+            timeout="10m",
+            prefix="antigravity",
+            cwd=_ANTIGRAVITY_WORKSPACE,
+        )
+        combined = "\n".join(part for part in (out, err) if part)
+        if _is_antigravity_auth_prompt(combined):
+            yield "[AntigravityCLI错误] Antigravity CLI 又要求重新登录了。请保持同一 Windows 用户会话，在 PowerShell 里运行 agy 完成登录后重试。"
+            return
+        if code and code != 0:
+            detail = err or out or "Antigravity CLI 调用失败"
+            yield f"[AntigravityCLI错误 code={code}] {detail[:800]}"
+            return
+        if err:
+            yield f"{CLI_STATUS_PREFIX}⚠️ Antigravity CLI stderr：{err[:120]}…"
+        if out:
+            yield out
+        else:
+            detail = _summarize_antigravity_log(Path(log_file) if log_file else None)
+            suffix = f"：{detail}" if detail else ""
+            yield f"[AntigravityCLI错误] 未收到回复{suffix}"
+    except FileNotFoundError:
+        yield "[AntigravityCLI错误] 无法启动 agy CLI 进程"
+    except Exception as e:
+        yield f"[AntigravityCLI错误] {e}"
+
+
 # ── Codex CLI ─────────────────────────────────────
 def _find_codex_script() -> str | None:
     """定位 Codex CLI 脚本路径"""
@@ -885,6 +1166,11 @@ async def stream_ai(messages: list, model_key: str, meta: dict | None = None, te
             yield chunk
     elif cfg["provider"] == "gemini_cli":
         async for chunk in call_gemini_cli(normalized, cfg["model"], meta, temperature, max_tokens):
+            if cancel_event and cancel_event.is_set():
+                return
+            yield chunk
+    elif cfg["provider"] == "antigravity_cli":
+        async for chunk in call_antigravity_cli(normalized, cfg["model"], meta, temperature, max_tokens):
             if cancel_event and cancel_event.is_set():
                 return
             yield chunk

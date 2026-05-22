@@ -85,6 +85,7 @@
     │   ├── memories.py           # 记忆库 CRUD + 手动总结触发 + 原文查看 + 锚点管理 API
     │   ├── heart_whispers.py     # 心语 API（列表查询 + 删除，旧版兼容保留）
     │   ├── moments.py            # 朋友圈 API（发布/删除/点赞点踩/评论/AI自动回复/未读红点）
+    │   ├── diary.py              # 日记本 API（用户手写/编辑/删除 + AI自动总结日记列表）
     │   ├── activity.py           # 活动日志 API（上报/查询/清理/状态诊断/10分钟摘要/AI联动开关配置）
     │   ├── voice.py              # 语音唤醒/通话控制 API
     │   ├── ghost_forest.py       # 奥罗斯幽林 TRPG API（16 个端点：人设/会话/剧情生成/选择/骰子/大结局）+ SSE 流式 TTS
@@ -109,6 +110,7 @@
     │   ├── settings.html         # 设置页 → /settings（API Key + 哨兵模型 + 向量模型配置）
     │   ├── worldbook.html        # 世界书页 → /worldbook（AI/用户人设编辑）
     │   ├── memory.html           # 记忆库页 → /memory（CRUD/搜索/总结/锚点/原文追溯）
+    │   ├── diary.html            # 日记本页 → /diary（用户手写日记 + Aion/Connor自动总结日记 + 编辑/删除）
     │   ├── schedule.html         # 日程管理页 → /schedule（列表/添加/删除）
     │   ├── camera.html           # 摄像头页 → /camera（预览/缩放/监控开关/配置）
     │   ├── monitor-logs.html     # 监控日志页 → /monitor-logs（按日期查看/实时WS推送）
@@ -135,7 +137,7 @@
     │   ├── manifest.json         # PWA Web App Manifest（从 /manifest.json 提供）
     │   └── sw.js                 # PWA Service Worker（从 /sw.js 提供）
     └── data/                     # ★ 备份只需复制此文件夹
-        ├── chat.db               # SQLite 数据库
+        ├── chat.db               # SQLite 数据库（聊天、记忆、朋友圈、日记本、礼物、钱包等核心表）
         ├── settings.json         # API Key + 哨兵/向量模型配置持久化
         ├── worldbook.json        # 世界书（AI/用户人设+名称）
         ├── cam_config.json       # 摄像头监控配置（active_source/esp32_cam_url/本地摄像头/定时/静默时段）
@@ -169,6 +171,7 @@
 | `/settings` | settings.html 设置页（API Key + 哨兵/向量模型配置） |
 | `/worldbook` | worldbook.html 世界书页 |
 | `/memory` | memory.html 记忆库页 |
+| `/diary` | diary.html 日记本页（用户手写 + AI 自动总结日记） |
 | `/schedule` | schedule.html 日程管理页 |
 | `/camera` | camera.html 摄像头监控页 |
 | `/monitor-logs` | monitor-logs.html 监控日志页 |
@@ -249,7 +252,7 @@
 16. **Debug 条** — 每条 AI 消息下方显示：模型名、输入/输出/总 token、召回记忆数，点击展开详情
 
 ### 向量记忆库（RAG 重构）
-17. **记忆总结（手动 + 自动）** — 手动：用户点击「总结新记忆」按钮触发（无最低条数限制）。自动：每 30 分钟检测，若用户已 30 分钟未对话且未总结消息 ≥ 30 条则自动触发。两者共用同一套逻辑和锚点，不会重复总结。从锚点之后的消息开始，每 30 条一组串行处理（余数 <10 合并到最后一组），使用当前聊天的核心模型（而非 flash-lite）提取结构化记忆（含关键词 + 重要度 0-1 + unresolved 判断），Prompt 注入世界书 AI/用户人设使记忆更具个人视角。每组成功后更新锚点。全部总结完成后，带最近 30 条聊天上下文 + 人设再调用一次核心模型，生成一句感慨/吐槽，作为 assistant 消息插入聊天（前置一条「🧠 AI整理了记忆库」系统胶囊）
+17. **记忆总结（手动 + 自动）** — 手动：用户点击「总结新记忆」按钮触发（无最低条数限制）。自动：每 30 分钟检测，若用户已 30 分钟未对话且未总结消息 ≥ 30 条则自动触发。两者共用同一套逻辑和锚点，不会重复总结。从锚点之后的消息开始，每 30 条一组串行处理（余数 <10 合并到最后一组），使用当前聊天的核心模型（而非 flash-lite）提取结构化记忆（含关键词 + 重要度 0-1 + unresolved 判断），Prompt 注入世界书 AI/用户人设使记忆更具个人视角。每组成功后更新锚点。全部总结完成后，再调用一次核心模型生成私密日记并存入日记本；模型可同时决定是否发布一条朋友圈，不再把总结感慨插入聊天窗口。
 18. **即时哨兵（instant_digest）** — 每次用户发消息时自动调用 flash-lite 分析最近对话，返回结构化 JSON：`{is_search_needed, keywords, require_detail, status, topic}`，决定是否需要搜索记忆、是否需要追溯原文细节，同时提供 topic 用于背景记忆浮现
 19. **向量化存储** — 使用 Gemini `gemini-embedding-001`（3072维）将记忆向量化，存入 SQLite memories 表，每条记忆含 keywords（JSON 关键词数组）、importance（重要度）、source_start_ts/source_end_ts（来源时间范围）、unresolved（是否待办/未完成）
 20. **综合评分召回** — `final_score = vec_sim × 0.6 + kw_score × 0.3 + importance × 0.1`，threshold=0.45，Top 5。关键词匹配支持子串模糊命中
@@ -765,6 +768,14 @@
   → 进入朋友圈页 → POST /api/moments/mark-read → 红点消失
 ```
 
+### 日记本（用户手写 + AI 自动总结日记）
+177. **数据存储** — 日记本数据存储在 SQLite `data/chat.db` 的 `diary_entries` 表中，作者使用内部标识 `user` / `aion` / `connor`，页面展示名从世界书和聊天室配置读取，不硬编码名称。
+178. **AI 自动日记** — Aion/Connor 的自动记忆总结完成后，会额外调用一次模型生成私密日记并写入 `diary_entries`；同一次 JSON 输出可决定是否发布朋友圈，发布时复用 `moments` 表和 `moment_new` WebSocket 广播。
+179. **用户手写日记** — `/diary` 页面标题栏右侧 `＋` 打开写日记弹窗，支持标题、心情、正文；保存后写入 `diary_entries(author='user')`。
+180. **编辑与删除** — 每张日记卡右上角提供编辑和删除；编辑调用 `PUT /api/diaries/{id}`，删除调用 `DELETE /api/diaries/{id}`，并通过 WebSocket `diary_updated` / `diary_new` 做多端同步。
+181. **入口位置** — Aion 私聊侧栏和 Connor 聊天室侧栏的钱包按钮下方都有「日记本」入口；主页也可通过 `/diary` 路由直接访问。
+182. **API 接口** — `GET /api/diaries`（分页列表，可按 author 筛选）、`POST /api/diaries`（用户新增）、`PUT /api/diaries/{id}`（编辑）、`DELETE /api/diaries/{id}`（删除）。
+
 ### AI 陪伴阅读（EPUB 书架 + 双AI批注 + 选文多目标聊天 + 用户高亮标注）
 185. **EPUB 导入** — 支持上传 `.epub` 格式电子书，后端使用 `ebooklib` 解析，自动提取目录、章节内容、封面与内嵌图片。书籍数据存储在 `data/books/{book_id}/` 目录下，每本书有独立的 SQLite 数据库（`book.db`）存储章节和批注
 186. **书架界面** — `/reading` 页面上半部分为书架，网格展示已导入书籍（封面+标题+作者+章节数），支持上传新书和删除
@@ -992,7 +1003,7 @@
 ### 爱的印记工作流程
 ```
 【触发时机（记忆总结完成后）】
-  _do_digest() 完成记忆总结 + 生成感慨消息
+  _do_digest() 完成记忆总结 + 生成私密日记
   → 调用 gift.judge_and_send_gift()
   → 构建判断 Prompt（人设 + 当前时间 + 记忆摘要 + 上下文）
   → simple_ai_call() 调用核心模型 → 返回 JSON
@@ -1198,7 +1209,7 @@
     核心模型（当前聊天模型）分析，注入世界书 AI/用户人设 → 输出 JSON:
       {"summary": "...", "keywords": [...], "importance": 0.8, "unresolved": true/false}
     → embedding 向量化 → 存入 SQLite → 更新锚点
-  全部组处理完毕后 → 核心模型带上下文生成感慨 → 插入系统胶囊 + assistant 消息
+  全部组处理完毕后 → 核心模型带上下文生成私密日记 → 存入 diary_entries，可选写入 moments
 ```
 
 ### 向量记忆库工作流程
@@ -1220,7 +1231,7 @@
     （summary + keywords + importance + unresolved）
   → gemini-embedding-001 向量化（3072维）
   → 存入 SQLite memories 表 + WebSocket 广播
-  → 全部完成后生成感慨，插入聊天（系统胶囊 + assistant 消息）
+  → 全部完成后生成私密日记，存入日记本；可选发布朋友圈
 ```
 
 ## API 一览
@@ -1270,6 +1281,14 @@
 | `/api/memories/{id}` | PUT | 编辑记忆（重新向量化，支持 unresolved 字段） |
 | `/api/memories/{id}` | DELETE | 删除记忆 |
 | `/api/memories/{id}/unresolved` | PATCH | 切换记忆的 unresolved 状态 |
+
+### 日记本
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/diaries` | GET | 分页获取日记，支持 `?author=user/aion/connor` 筛选 |
+| `/api/diaries` | POST | 用户手写新增日记（标题/心情可选，正文必填） |
+| `/api/diaries/{id}` | PUT | 编辑日记标题、心情和正文 |
+| `/api/diaries/{id}` | DELETE | 删除日记 |
 
 ### TTS 语音合成
 | 端点 | 方法 | 说明 |

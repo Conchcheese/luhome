@@ -11,7 +11,7 @@ from typing import Optional
 
 import httpx
 
-from config import SETTINGS, MODELS, save_settings, get_key, get_sentinel_config, load_worldbook, save_worldbook, load_chat_status, TTS_CACHE_DIR
+from config import SETTINGS, MODELS, save_settings, get_key, get_sentinel_config, load_worldbook, save_worldbook, load_chat_status, TTS_CACHE_DIR, THEATER_TTS_CACHE_DIR
 
 router = APIRouter()
 
@@ -134,7 +134,7 @@ async def update_image_gen_setting(body: ImageGenToggle):
     save_settings(SETTINGS)
     return {"ok": True, "image_gen_enabled": body.enabled}
 
-# ── Gemini CLI 工具调用开关 ─────────────────────────
+# ── CLI 工具调用开关（Gemini CLI / Antigravity CLI） ─────────────────
 @router.get("/api/settings/gemini-cli-tools")
 async def get_gemini_cli_tools_setting():
     return {"gemini_cli_tools_enabled": SETTINGS.get("gemini_cli_tools_enabled", False)}
@@ -236,6 +236,18 @@ async def tts_audio(msg_id: str):
     if not safe_id:
         return Response(status_code=404)
     cache_path = TTS_CACHE_DIR / f"{safe_id}.mp3"
+    if not cache_path.exists():
+        return Response(status_code=404)
+    return FileResponse(cache_path, media_type="audio/mpeg", filename=f"{safe_id}.mp3")
+
+@router.head("/api/theater/tts/audio/{msg_id}")
+@router.get("/api/theater/tts/audio/{msg_id}")
+async def theater_tts_audio(msg_id: str):
+    import re
+    safe_id = re.sub(r'[^a-zA-Z0-9_\-]', '', msg_id)
+    if not safe_id:
+        return Response(status_code=404)
+    cache_path = THEATER_TTS_CACHE_DIR / f"{safe_id}.mp3"
     if not cache_path.exists():
         return Response(status_code=404)
     return FileResponse(cache_path, media_type="audio/mpeg", filename=f"{safe_id}.mp3")

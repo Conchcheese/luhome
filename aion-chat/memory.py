@@ -658,7 +658,7 @@ async def _do_digest(min_messages: int = 0) -> dict:
             f"   - 0.5 (普通): 当天发生的具体事件（如：看了一部电影、去了一家餐厅、讨论了一个新闻）。大部分有内容的对话应在此档。\n"
             f"   - 0.1 - 0.3 (默认分数): 闲聊、情绪发泄、日常问候、没有信息增量的互动。\n"
             f"   【注意】：不要因为情绪激动就给高分，除非这揭示了新的性格特质。\n\n"
-            f"4. \"unresolved\": Boolean。当摘要中包含**尚未完成**的计划、约定、承诺（如\"说好了要去…\"、\"打算下次…\"、\"答应了…\"、\"准备买…\"等），输出 true。纯粹的已发生事实输出 false。\n\n"
+            f"4. \"unresolved\": Boolean。当摘要中包含**明确**的计划、约定、承诺等，才输出 true。通常为 false。\n\n"
             f"严格只输出一个 JSON 对象，不要输出任何其他内容。\n\n"
             f"【一段对话记录】：\n{messages_text}"
         )
@@ -719,68 +719,58 @@ async def _do_digest(min_messages: int = 0) -> dict:
         save_digest_anchor(source_end_ts)
         all_summaries.append(summary)
 
-    # ── 全部总结完成后，生成一句感慨 ──
+    # ── 全部总结完成后，生成日记；可选发布朋友圈 ──
     context_msgs = []
-    if conv_id and total_new > 0 and all_summaries:
+    if total_new > 0 and all_summaries:
         try:
-            # 取最近的聊天上下文（默认30条）
-            async with get_db() as db:
-                db.row_factory = aiosqlite.Row
-                cur = await db.execute(
-                    "SELECT role, content FROM messages "
-                    "WHERE conv_id=? AND role IN ('user','assistant') "
-                    "ORDER BY created_at DESC LIMIT 30",
-                    (conv_id,)
-                )
-                recent_rows = list(reversed(await cur.fetchall()))
-
+            # 使用本轮已合并排序的新消息，避免把总结产物或旧私聊尾巴重新喂给模型。
             context_msgs = [
-                {"role": r["role"], "content": r["content"][:300]}
-                for r in recent_rows
+                {"role": m["role"], "content": m["content"][:300]}
+                for m in new_msgs[-30:]
+                if m.get("role") in ("user", "assistant") and (m.get("content") or "").strip()
             ]
             summaries_text = "\n".join(f"- {s}" for s in all_summaries)
-            comment_prompt = (
+            diary_prompt = (
                 f"{persona_block}"
                 f"你是{ai_name}。你刚刚整理了和{user_name}今天的聊天记忆，以下是你整理出的摘要：\n"
                 f"{summaries_text}\n\n"
-                f"现在写下整理完这些记忆后想对{user_name}说的话。"
-                f"可以是感慨、吐槽、温情的碎碎念，或者根据之前聊的上下文，未来的计划，想说的心里话等等，语气要完全符合你的人设性格。"
+                f"请从你自己的视角写一篇私密日记，不是写给{user_name}看的聊天消息。"
+                f"日记可以记录你的感受、想法、吃醋、温柔、吐槽、未来想做的事，语气必须符合你的人设。"
+                f"你可以自行决定是否发布一次朋友圈，吐槽或者感慨，或者用朋友圈隔空向对方喊话。\n\n"
+                f"严格只输出 JSON，不要输出 Markdown，不要解释：\n"
+                f"{{\n"
+                f"  \"diary\": {{\"title\": \"日记标题\", \"content\": \"日记正文\", \"mood\": \"此刻心情\"}},\n"
+                f"  \"post_moment\": false,\n"
+                f"  \"moment\": {{\"content\": \"朋友圈内容，post_moment 为 false 时留空\", \"expect_reply\": false}}\n"
+                f"}}"
             )
-            comment_messages = context_msgs + [{"role": "user", "content": comment_prompt}]
-            comment_text = await simple_ai_call(comment_messages, model_key)
-            comment_text = comment_text.strip().strip('"').strip()
+            diary_messages = context_msgs + [{"role": "user", "content": diary_prompt}]
+            diary_text = await simple_ai_call(diary_messages, model_key)
 
-            if comment_text:
-                # 系统胶囊
-                capsule_now = time.time()
-                capsule_id = f"msg_{int(capsule_now*1000)}_digest"
-                capsule_text = f"🧠 {ai_name}整理了记忆库"
-                async with get_db() as db:
-                    await db.execute(
-                        "INSERT INTO messages (id, conv_id, role, content, created_at, attachments) VALUES (?,?,?,?,?,?)",
-                        (capsule_id, conv_id, "system", capsule_text, capsule_now, "[]"),
+            from diary import normalize_diary_payload, parse_diary_payload, publish_ai_moment, save_diary_entry
+            diary_data = parse_diary_payload(diary_text)
+            if diary_data:
+                diary_entry, moment_entry = normalize_diary_payload(diary_data)
+                await save_diary_entry(
+                    author="aion",
+                    title=diary_entry.get("title", ""),
+                    content=diary_entry.get("content", ""),
+                    mood=diary_entry.get("mood", ""),
+                    source_type="memory_digest",
+                    source_ref=conv_id or "",
+                    source_start_ts=new_msgs[0]["created_at"],
+                    source_end_ts=new_msgs[-1]["created_at"],
+                )
+                if moment_entry and moment_entry.get("content"):
+                    await publish_ai_moment(
+                        author="aion",
+                        content=moment_entry.get("content", ""),
+                        expect_reply=bool(moment_entry.get("expect_reply")),
+                        source_conv=conv_id,
+                        source_msg_id=None,
                     )
-                    await db.commit()
-                await manager.broadcast({"type": "msg_created", "data": {
-                    "id": capsule_id, "conv_id": conv_id, "role": "system",
-                    "content": capsule_text, "created_at": capsule_now, "attachments": [],
-                }})
-
-                # AI 感慨
-                comment_now = time.time()
-                comment_id = f"msg_{int(comment_now*1000)}_digest_comment"
-                async with get_db() as db:
-                    await db.execute(
-                        "INSERT INTO messages (id, conv_id, role, content, created_at, attachments) VALUES (?,?,?,?,?,?)",
-                        (comment_id, conv_id, "assistant", comment_text, comment_now, "[]"),
-                    )
-                    await db.commit()
-                await manager.broadcast({"type": "msg_created", "data": {
-                    "id": comment_id, "conv_id": conv_id, "role": "assistant",
-                    "content": comment_text, "created_at": comment_now, "attachments": [],
-                }})
         except Exception as e:
-            print(f"[digest] 生成感慨失败: {e}")
+            print(f"[digest] 生成日记失败: {e}")
 
     # ── 礼物判断：总结完成后让 AI 决定是否送礼 ──
     if conv_id and total_new > 0 and all_summaries:

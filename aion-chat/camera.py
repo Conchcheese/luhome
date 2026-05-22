@@ -103,6 +103,122 @@ async def async_get_last_user_msg_time() -> float:
         return row[0] if row else 0
 
 
+async def async_get_last_aion_timeline_user_msg_time(conv_id: str = None) -> float:
+    """Aion 视角的最后用户发言时间：合并私聊 + 最近群聊。"""
+    latest_ts = 0.0
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        if not conv_id:
+            cur = await db.execute(
+                "SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 1"
+            )
+            conv = await cur.fetchone()
+            conv_id = conv["id"] if conv else None
+
+        if conv_id:
+            cur = await db.execute(
+                "SELECT created_at FROM messages "
+                "WHERE conv_id=? AND role='user' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (conv_id,),
+            )
+            row = await cur.fetchone()
+            if row and row["created_at"]:
+                latest_ts = max(latest_ts, float(row["created_at"]))
+
+        cur = await db.execute(
+            "SELECT id FROM chatroom_rooms "
+            "WHERE type='group' ORDER BY updated_at DESC LIMIT 1"
+        )
+        room = await cur.fetchone()
+        if room:
+            cur = await db.execute(
+                "SELECT created_at FROM chatroom_messages "
+                "WHERE room_id=? AND sender='user' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (room["id"],),
+            )
+            row = await cur.fetchone()
+            if row and row["created_at"]:
+                latest_ts = max(latest_ts, float(row["created_at"]))
+
+    return latest_ts
+
+
+async def async_get_recent_aion_timeline_text(
+    conv_id: str = None,
+    limit: int = 10,
+    *,
+    user_name: str = "用户",
+    ai_name: str = "AI",
+    connor_name: str = "Connor",
+) -> str:
+    """给哨兵看的最近聊天记录，口径与 Aion 私聊上下文一致。"""
+    rows = []
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        if not conv_id:
+            cur = await db.execute(
+                "SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 1"
+            )
+            conv = await cur.fetchone()
+            conv_id = conv["id"] if conv else None
+
+        if conv_id:
+            cur = await db.execute(
+                "SELECT '私聊' AS source, role AS sender, content, created_at "
+                "FROM messages "
+                "WHERE conv_id=? AND role IN ('user','assistant') "
+                "ORDER BY created_at DESC LIMIT ?",
+                (conv_id, limit),
+            )
+            rows.extend(dict(r) for r in await cur.fetchall())
+
+        cur = await db.execute(
+            "SELECT id FROM chatroom_rooms "
+            "WHERE type='group' ORDER BY updated_at DESC LIMIT 1"
+        )
+        room = await cur.fetchone()
+        if room:
+            cur = await db.execute(
+                "SELECT '群聊' AS source, sender, content, created_at "
+                "FROM chatroom_messages "
+                "WHERE room_id=? AND sender IN ('user','aion','connor') "
+                "ORDER BY created_at DESC LIMIT ?",
+                (room["id"], limit),
+            )
+            rows.extend(dict(r) for r in await cur.fetchall())
+
+    rows.sort(key=lambda r: r.get("created_at") or 0)
+    rows = rows[-limit:]
+    lines = []
+    for r in rows:
+        sender = r.get("sender")
+        if sender == "user":
+            name = user_name
+        elif sender in ("assistant", "aion"):
+            name = ai_name
+        elif sender == "connor":
+            name = connor_name
+        else:
+            name = str(sender or "unknown")
+        content = (r.get("content") or "").strip()
+        if sender in ("assistant", "aion"):
+            content = _strip_leading_cli_role_header(content)
+        content = re.sub(r"<meta>.*?</meta>", "", content, flags=re.S).strip()
+        content = content[:200] + "..." if len(content) > 200 else content
+        if content:
+            lines.append(f"[{r.get('source')}] {name}: {content}")
+    return "\n".join(lines)
+
+
+def _strip_leading_cli_role_header(text: str) -> str:
+    """去掉 CLI 偶尔回吐的续写角色标签，如开头的 [Assistant]。"""
+    if not text:
+        return text
+    return re.sub(r"^\s*\[(?:Assistant|Model|AI|Aion)\]\s*", "", text, count=1).lstrip()
+
+
 def detect_cameras(max_test: int = 5, skip_index: int = -1) -> list:
     """扫描可用摄像头（DirectShow 后端 + 实际读帧验证）
     skip_index: 跳过正在使用的摄像头，避免抢占设备导致采集线程中断
@@ -666,7 +782,20 @@ class CameraMonitor:
         user_name = wb.get("user_name", "你")
         ai_name = wb.get("ai_name", "AI")
         now_str = time.strftime("%Y年%m月%d日  %H时:%M分:%S秒")
-        last_user_ts = await async_get_last_user_msg_time()
+
+        conv_id = None
+        try:
+            async with get_db() as db:
+                db.row_factory = aiosqlite.Row
+                cur = await db.execute(
+                    "SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 1"
+                )
+                conv = await cur.fetchone()
+                conv_id = conv["id"] if conv else None
+        except Exception:
+            conv_id = None
+
+        last_user_ts = await async_get_last_aion_timeline_user_msg_time(conv_id)
         last_user_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(last_user_ts)) if last_user_ts > 0 else "未知"
 
         recent_logs = read_logs_since(time.time() - 3600 * 6)
@@ -689,26 +818,13 @@ class CameraMonitor:
         # 获取最近 10 条聊天上下文，帮助哨兵更好地了解用户近况
         recent_chat_text = ""
         try:
-            async with get_db() as db:
-                db.row_factory = aiosqlite.Row
-                cur = await db.execute(
-                    "SELECT c.id FROM conversations ORDER BY c.updated_at DESC LIMIT 1"
-                )
-                conv = await cur.fetchone()
-                if conv:
-                    cur2 = await db.execute(
-                        "SELECT role, content FROM messages WHERE conv_id=? AND role IN ('user','assistant') ORDER BY created_at DESC LIMIT 10",
-                        (conv["id"],)
-                    )
-                    chat_rows = await cur2.fetchall()
-                    if chat_rows:
-                        lines = []
-                        for r in reversed(chat_rows):
-                            name = user_name if r["role"] == "user" else ai_name
-                            # 截断过长消息，避免 prompt 膨胀
-                            text = r["content"][:200] + "..." if len(r["content"]) > 200 else r["content"]
-                            lines.append(f"{name}: {text}")
-                        recent_chat_text = "\n".join(lines)
+            recent_chat_text = await async_get_recent_aion_timeline_text(
+                conv_id,
+                10,
+                user_name=user_name,
+                ai_name=ai_name,
+                connor_name=wb.get("connor_name", "Connor"),
+            )
         except Exception:
             recent_chat_text = ""
 
@@ -856,6 +972,11 @@ call_core判断依据：
             core_parts.append(f"这段时间{user_name}的整体状况：{summary}")
         core_parts.append(f"最新一条监控日志原文（哨兵看到的画面完整描述）：{trigger_log}")
         core_parts.append(f"最近的监控记录：\n{recent_detail}")
+        core_parts.append(
+            f"你现在是在 {ai_name} 与 {user_name} 的私聊里主动联系她。"
+            "只用你自己的口吻回复，不要续写、复述或模仿历史里的 [Connor]:、[Assistant]、[User] 等角色标签，"
+            "也不要替 Connor 发言。"
+        )
         # 注入位置和天气信息
         try:
             from location import format_location_for_prompt
@@ -918,6 +1039,7 @@ call_core判断依据：
         except Exception as e:
             full_text = f"[Core 回复失败] {e}"
 
+        full_text = _strip_leading_cli_role_header(full_text)
         if not full_text.strip():
             return
 

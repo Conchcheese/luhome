@@ -23,6 +23,8 @@ MONITOR_LOGS_DIR = DATA_DIR / "monitor_logs"
 MONITOR_LOGS_DIR.mkdir(exist_ok=True)
 TTS_CACHE_DIR = DATA_DIR / "tts_cache"
 TTS_CACHE_DIR.mkdir(exist_ok=True)
+THEATER_TTS_CACHE_DIR = DATA_DIR / "theater_tts_cache"
+THEATER_TTS_CACHE_DIR.mkdir(exist_ok=True)
 
 SETTINGS_PATH = DATA_DIR / "settings.json"
 WORLDBOOK_PATH = DATA_DIR / "worldbook.json"
@@ -170,18 +172,14 @@ def sanitize_filename(name):
 # ── 模型配置 ─────────────────────────────────────
 MODELS = {
     "硅基GLM-5.1":      {"provider": "siliconflow", "model": "Pro/zai-org/GLM-5.1"},
-    "硅基GLM-5":    {"provider": "siliconflow", "model": "Pro/zai-org/GLM-5"},
-    "硅基Kimi2.6":    {"provider": "siliconflow", "model": "Pro/moonshotai/Kimi-K2.6"},
-    "gemini-2.5-pro":  {"provider": "gemini", "model": "gemini-2.5-pro"},
+    "gemini-3.5-flash":  {"provider": "gemini", "model": "gemini-3.5-flash"},
     "gemini-3.1-pro":  {"provider": "gemini", "model": "gemini-3.1-pro-preview"},
     "gemini-3.1-lite":  {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
-    "哈基米opus4.7": {"provider": "aipro", "model": "claude-opus-4-7"},
-    "哈基米opus4.6":  {"provider": "aipro", "model": "claude-opus-4-6"},
     "哈基米gpt-5.5":    {"provider": "aipro", "model": "gemini-3.1-pro-high"},
     "哈基米3.1pro":     {"provider": "aipro", "model": "gemini-3.1-pro-high"},
-    "CLI-2.5pro":       {"provider": "gemini_cli", "model": "gemini-2.5-pro"},
+    "AGY-3.5flash":       {"provider": "antigravity_cli", "model": "gemini-3.5-flash"},
+    "CLI-3.5-flash":       {"provider": "gemini_cli", "model": "gemini-3.5-flash"},
     "CLI-3.1pro":       {"provider": "gemini_cli", "model": "gemini-3.1-pro-preview"},
-    "CLI-2.5flash":     {"provider": "gemini_cli", "model": "gemini-2.5-flash"},
     "Codex":            {"provider": "codex_cli",  "model": ""},
 }
 

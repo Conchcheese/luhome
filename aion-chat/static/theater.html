@@ -287,20 +287,6 @@ body { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-se
     <input type="text" id="personaName" placeholder="角色名">
     <label>角色设定</label>
     <textarea id="personaText" placeholder="角色的人设 / system prompt"></textarea>
-    <label>默认模型（留空跟随对话）</label>
-    <select id="personaModel"><option value="">跟随对话设置</option></select>
-    <label>默认温度</label>
-    <div class="slider-row">
-      <input type="range" id="personaTempSlider" min="0" max="2" step="0.1" value="0.8"
-        oninput="$('personaTempVal').textContent=this.value">
-      <span class="slider-val" id="personaTempVal">0.8</span>
-    </div>
-    <label>默认上下文条数</label>
-    <div class="slider-row">
-      <input type="range" id="personaContextSlider" min="1" max="100" value="20"
-        oninput="$('personaContextVal').textContent=this.value">
-      <span class="slider-val" id="personaContextVal">20</span>
-    </div>
     <div class="btn-row">
       <button class="btn-cancel" onclick="closePersonaModal()">取消</button>
       <button class="btn-save" onclick="savePersona()">保存</button>
@@ -402,7 +388,6 @@ async function init() {
 function populateModelSelects() {
   const opts = models.map(m => `<option value="${m}">${m}</option>`).join('');
   $('modelSelect').innerHTML = opts;
-  $('personaModel').innerHTML = '<option value="">跟随对话设置</option>' + opts;
 }
 
 /* ── TTS 音色加载 ── */
@@ -1055,11 +1040,18 @@ function playNextTTS() {
 async function replayTTS(msgId) {
   const safeId = msgId.replace(/[^a-zA-Z0-9_\-]/g, '');
   const chunks = [];
-  for (let seq = 0; seq < 100; seq++) {
+  let misses = 0;
+  for (let seq = 0; seq < 200; seq++) {
     try {
-      const res = await fetch(`/api/tts/audio/${safeId}_s${seq}`, { method: 'HEAD' });
-      if (!res.ok) break;
-      chunks.push(`/api/tts/audio/${safeId}_s${seq}`);
+      const res = await fetch(`/api/theater/tts/audio/${safeId}_s${seq}`, { method: 'HEAD' });
+      if (res.ok) {
+        chunks.push(`/api/theater/tts/audio/${safeId}_s${seq}`);
+        misses = 0;
+      } else if (chunks.length > 0 && ++misses >= 8) {
+        break;
+      } else if (chunks.length === 0 && seq >= 8) {
+        break;
+      }
     } catch(e) { break; }
   }
   if (!chunks.length) { showToast('暂无音频缓存'); return; }
@@ -1106,13 +1098,6 @@ async function selectPersona(pid) {
     const conv = conversations.find(c => c.id === currentConvId);
     if (conv) conv.persona_id = pid;
   }
-  // 如果角色有默认温度/上下文，更新滑块
-  const p = personas.find(x => x.id === pid);
-  if (p) {
-    if (p.temperature !== undefined) { $('tempSlider').value = p.temperature; $('tempVal').textContent = p.temperature; }
-    if (p.context_limit !== undefined) { $('contextSlider').value = p.context_limit; $('contextVal').textContent = p.context_limit; }
-    if (p.model && models.includes(p.model)) { $('modelSelect').value = p.model; changeModel(); }
-  }
 }
 
 function openPersonaModal(editId) {
@@ -1124,21 +1109,11 @@ function openPersonaModal(editId) {
     $('personaEditId').value = editId;
     $('personaName').value = p.name;
     $('personaText').value = p.persona;
-    $('personaModel').value = p.model || '';
-    $('personaTempSlider').value = p.temperature || 0.8;
-    $('personaTempVal').textContent = p.temperature || 0.8;
-    $('personaContextSlider').value = p.context_limit || 20;
-    $('personaContextVal').textContent = p.context_limit || 20;
   } else {
     $('personaModalTitle').textContent = '新建角色';
     $('personaEditId').value = '';
     $('personaName').value = '';
     $('personaText').value = '';
-    $('personaModel').value = '';
-    $('personaTempSlider').value = 0.8;
-    $('personaTempVal').textContent = '0.8';
-    $('personaContextSlider').value = 20;
-    $('personaContextVal').textContent = '20';
   }
   overlay.classList.add('show');
 }
@@ -1152,9 +1127,6 @@ async function savePersona() {
   const data = {
     name: $('personaName').value.trim() || '未命名角色',
     persona: $('personaText').value,
-    model: $('personaModel').value,
-    temperature: parseFloat($('personaTempSlider').value),
-    context_limit: parseInt($('personaContextSlider').value),
   };
   if (editId) {
     const updated = await api('PUT', `/api/theater/personas/${editId}`, data);

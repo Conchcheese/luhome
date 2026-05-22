@@ -26,6 +26,7 @@
       <button onclick="openWhisper()">💗 密语时刻</button>
       <button onclick="openStarredPanel()">⭐ 星标消息</button>
       <button onclick="openWalletPanel()">💰 钱包</button>
+      <button onclick="openSubPage('/diary')">📔 日记本</button>
       <button onclick="openSubPage('/')">🏠 返回主页</button>
     </div>
   </aside>
@@ -224,7 +225,7 @@
       </div>
       <div class="cam-section">
         <div class="cam-toggle-row">
-          <span class="cam-toggle-label">允许 Gemini CLI 调用工具</span>
+          <span class="cam-toggle-label">允许 CLI 模型调用工具</span>
           <label class="toggle-switch">
             <input type="checkbox" id="geminiCliToolsToggle" onchange="toggleGeminiCliTools()">
             <span class="toggle-slider"></span>
@@ -273,6 +274,7 @@
     <button onclick="closeSubPage()">✕</button>
     <span id="subPageTitle"></span>
   </div>
+
   <iframe id="subPageFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
 </div>
 <script src="/static/chat.js"></script>

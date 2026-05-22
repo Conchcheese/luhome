@@ -136,6 +136,23 @@ async def init_db():
                 last_read_at REAL NOT NULL DEFAULT 0
             )
         """)
+        # ── AI 日记本 ──
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS diary_entries (
+                id TEXT PRIMARY KEY,
+                author TEXT NOT NULL,
+                title TEXT DEFAULT '',
+                content TEXT NOT NULL,
+                mood TEXT DEFAULT '',
+                source_type TEXT DEFAULT '',
+                source_ref TEXT DEFAULT '',
+                source_start_ts REAL,
+                source_end_ts REAL,
+                created_at REAL NOT NULL
+            )
+        """)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_diary_entries_created ON diary_entries(created_at DESC)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_diary_entries_author ON diary_entries(author, created_at DESC)")
         # ── 书籍表 ──
         await db.execute("""
             CREATE TABLE IF NOT EXISTS books (

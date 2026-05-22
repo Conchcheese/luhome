@@ -110,20 +110,22 @@ function escHtml(s) { const d = document.createElement("div"); d.textContent = s
 function formatMsg(s) {
   // 先转义 HTML，再将 [[image:path]] 标记渲染为 <img>
   const escaped = escHtml(s);
-  // 渲染 [转账：N元] 为微信风格卡片
-  const transferRe = /\[\u8f6c\u8d26[\uff1a:]\s*(-?\d+(?:\.\d+)?)\s*\u5143\]/g;
+  // 渲染 [转账给XXX：N元] 或 [转账：N元] 为微信风格卡片
+  const transferRe = /\[\u8f6c\u8d26(?:\u7ed9([^\uff1a:]+?))?[\uff1a:]\s*(-?\d+(?:\.\d+)?)\s*\u5143\]/g;
   const aiName = (worldBook && worldBook.ai_name) || 'AI';
   const userName = (worldBook && worldBook.user_name) || '你';
-  let processed = escaped.replace(transferRe, (match, amount) => {
+  let processed = escaped.replace(transferRe, (match, recipient, amount) => {
     const val = parseFloat(amount);
     const isNeg = val < 0;
     const absVal = Math.abs(val);
+    const targetName = recipient ? recipient.trim() : '';
     if (isNeg) {
       // 负数 = 钱包扣除
-      return `<div class="transfer-card deduct"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><line x1="14" y1="14" x2="26" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="14" x2="14" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">钱包扣除</div></div><div class="transfer-card-footer">扣除</div></div>`;
+      return `<div class="transfer-card deduct"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><line x1="14" y1="14" x2="26" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="14" x2="14" y2="26" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">钱包扣除${targetName ? '（' + targetName + '）' : ''}</div></div><div class="transfer-card-footer">扣除</div></div>`;
     } else {
       // 正数 = 转账
-      return `<div class="transfer-card"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M12 17h12M24 17l-3-3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M28 23H16M16 23l3 3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">发起了一笔转账</div></div><div class="transfer-card-footer">转账</div></div>`;
+      const descText = targetName ? `转账给${targetName}` : '发起了一笔转账';
+      return `<div class="transfer-card"><div class="transfer-card-icon-wrap"><svg viewBox="0 0 40 40" width="28" height="28"><circle cx="20" cy="20" r="18" fill="none" stroke="#fff" stroke-width="2.5"/><path d="M12 17h12M24 17l-3-3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M28 23H16M16 23l3 3" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div><div class="transfer-card-body"><div class="transfer-card-amount">¥${absVal}</div><div class="transfer-card-desc">${descText}</div></div><div class="transfer-card-footer">转账</div></div>`;
     }
   });
   // 渲染 [[image:path]]
@@ -748,7 +750,7 @@ async function toggleImageGenEnabled() {
   } catch(e) {}
 })();
 
-// ── Gemini CLI 工具调用开关 ──
+// ── CLI 工具调用开关 ──
 async function toggleGeminiCliTools() {
   const enabled = $('geminiCliToolsToggle').checked;
   try {
@@ -757,7 +759,7 @@ async function toggleGeminiCliTools() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ enabled })
     });
-  } catch(e) { console.warn('保存 Gemini CLI 工具设置失败', e); }
+  } catch(e) { console.warn('保存 CLI 工具设置失败', e); }
 }
 (async function initGeminiCliToolsToggle() {
   try {
@@ -772,9 +774,30 @@ let ttsEnabled = localStorage.getItem('aion_tts_enabled') === 'true';
 let ttsVoiceId = localStorage.getItem('aion_tts_voice') || '';
 let ttsAudio = new Audio();
 let ttsPlaying = false;
+let ttsResumeTimer = null;
+let ttsManualStop = false;
 // 分段播放队列：{ msgId: { nextPlay: 0, chunks: {seq: url}, playing: bool } }
 let ttsChunkQueues = {};
 let ttsPlayOrder = []; // 按到达顺序记录 msgId，确保跨消息顺序播放
+
+function clearTTSResumeTimer() {
+  if (ttsResumeTimer) {
+    clearTimeout(ttsResumeTimer);
+    ttsResumeTimer = null;
+  }
+}
+
+function scheduleTTSResume() {
+  if (ttsManualStop || !ttsPlaying || !ttsAudio.src || ttsAudio.ended || !ttsAudio.paused) return;
+  if (ttsResumeTimer) return;
+  ttsResumeTimer = setTimeout(() => {
+    ttsResumeTimer = null;
+    if (ttsManualStop || !ttsPlaying || !ttsAudio.src || ttsAudio.ended || !ttsAudio.paused) return;
+    ttsAudio.play().catch(() => {
+      scheduleTTSResume();
+    });
+  }, 1500);
+}
 
 function _sendTTSState() {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -787,6 +810,8 @@ function toggleTTS() {
   localStorage.setItem('aion_tts_enabled', ttsEnabled);
   _sendTTSState();
   if (!ttsEnabled) {
+    ttsManualStop = true;
+    clearTTSResumeTimer();
     ttsAudio.pause();
     ttsAudio.src = '';
     ttsChunkQueues = {};
@@ -825,7 +850,8 @@ async function refreshTTSVoices() {
 }
 
 function enqueueTTSChunk(msgId, seq, url) {
-  if (!ttsEnabled && !(typeof videoCall !== 'undefined' && videoCall.active)) return;
+  const isChatroomTTS = msgId.startsWith('cm_');
+  if (!isChatroomTTS && !ttsEnabled && !(typeof videoCall !== 'undefined' && videoCall.active)) return;
   // 忽略小剧场的 TTS（tm_ 前缀），避免重复播放
   if (msgId.startsWith('tm_')) return;
   if (!ttsChunkQueues[msgId]) {
@@ -841,7 +867,8 @@ function enqueueTTSChunk(msgId, seq, url) {
 }
 
 async function playNextTTSChunk() {
-  if (!ttsEnabled && !(typeof videoCall !== 'undefined' && videoCall.active)) { ttsPlaying = false; return; }
+  const hasChatroomTTS = ttsPlayOrder.some(id => id.startsWith('cm_'));
+  if (!hasChatroomTTS && !ttsEnabled && !(typeof videoCall !== 'undefined' && videoCall.active)) { ttsPlaying = false; return; }
 
   // 找到当前应该播放的 msgId
   while (ttsPlayOrder.length > 0) {
@@ -850,7 +877,7 @@ async function playNextTTSChunk() {
     if (!q) { ttsPlayOrder.shift(); continue; }
 
     const nextSeq = q.nextPlay;
-    const url = q.chunks[nextSeq];
+    let url = q.chunks[nextSeq];
     if (url === undefined) {
       // 如果该消息已标记完成且所有分段已播完，清理并继续下一条
       if (q.finished) {
@@ -860,30 +887,47 @@ async function playNextTTSChunk() {
           delete ttsChunkQueues[msgId];
           continue; // 继续处理下一条消息
         }
+        while (q.nextPlay <= maxSeq && q.chunks[q.nextPlay] === undefined) q.nextPlay++;
+        if (q.nextPlay > maxSeq) {
+          ttsPlayOrder.shift();
+          delete ttsChunkQueues[msgId];
+          continue;
+        }
+        url = q.chunks[q.nextPlay];
       }
-      // 下一个分段还没到，等待
-      ttsPlaying = false;
-      return;
+      if (url === undefined) {
+        // 下一个分段还没到，等待
+        ttsPlaying = false;
+        return;
+      }
     }
 
     // 播放这个分段
     ttsPlaying = true;
+    ttsManualStop = false;
+    clearTTSResumeTimer();
     try {
       ttsAudio.src = url;
       ttsAudio.onended = () => {
+        clearTTSResumeTimer();
         ttsPlaying = false;
         q.nextPlay++;
         playNextTTSChunk();
       };
       ttsAudio.onerror = () => {
+        clearTTSResumeTimer();
         ttsPlaying = false;
         q.nextPlay++;
         playNextTTSChunk();
       };
+      ttsAudio.onplaying = clearTTSResumeTimer;
+      ttsAudio.onpause = () => {
+        if (ttsAudio.ended) return;
+        scheduleTTSResume();
+      };
       await ttsAudio.play().catch(() => {
-        ttsPlaying = false;
-        q.nextPlay++;
-        playNextTTSChunk();
+        // 外部 App 抢占音频焦点时，play() 可能会短暂失败；保留当前分片，等待焦点恢复。
+        scheduleTTSResume();
       });
       return;
     } catch(e) {
@@ -1133,7 +1177,8 @@ function handleSync(msg) {
     }
   } else if (type === "music") {
     // 通过 WebSocket 收到音乐卡片（语音发送 / 闹铃触发 / 定时监控）
-    if (data.msg_id && !streamingAiId) {
+    // 忽略来自聊天室的音乐广播（聊天室有自己的播放器）
+    if (data.msg_id && !streamingAiId && data.source !== "chatroom") {
       msgMusicCards[data.msg_id] = data.cards;
       renderMusicCards(data.msg_id);
       scrollBottom();
@@ -1260,7 +1305,7 @@ function renderMessages() {
     const displayContent = isUser ? m.content : m.content.replace(/<meta>[\s\S]*?<\/meta>/g, '').trim();
     const hasVoiceAtt = m.attachments && m.attachments.some(a => typeof a === 'object' && (a.type === 'voice' || a.type === 'video_clip'));
     // 转账标签前后强制换行，确保卡片独占一个气泡
-    const splitContent = displayContent.replace(/(\[转账[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n$1\n');
+    const splitContent = displayContent.replace(/(\[转账(?:给[^\uff1a:]+?)?[：:]\s*-?\d+(?:\.\d+)?\s*元\])/g, '\n$1\n');
     const parts = (isUser ? splitContent.split(/\n+/) : splitContent.split(/\n+/)).filter(p => p.trim());
     let bubblesHtml;
     if (hasVoiceAtt && !displayContent.trim()) {
@@ -2010,9 +2055,9 @@ async function _processSSEStream(res) {
             _startTypingAnim(aiMsgId);
           } else if (data.type === "cli_status") {
             _updateTypingStatus(aiMsgId, data.text);
-          } else if (data.type === "chunk") {
+          } else if (data.type === "chunk" || data.type === "replace") {
             _stopTypingAnim();
-            aiContent += data.content;
+            aiContent = data.type === "replace" ? data.content : aiContent + data.content;
             const display = aiContent.replace(/\[CAM_CHECK\]/g, '').replace(/\[POI_SEARCH:[^\]]*\]/g, '').replace(/\[MUSIC:[^\]]*\]/g, '').replace(/\[ALARM:[^\]]*\]/g, '').replace(/\[REMINDER:[^\]]*\]/g, '').replace(/\[Monitor:[^\]]*\]/g, '').replace(/\[SCHEDULE_DEL:[^\]]*\]/g, '').replace(/\[SCHEDULE_LIST\]/g, '').replace(/\[TOY:[^\]]*\]/g, '').replace(/\[HEART:[^\]]*\]/g, '').replace(/\[MEMORY:[^\]]*\]/g, '').replace(/\[查看动态:\d+\]/g, '').replace(/\[视频电话\]/g, '').replace(/\[SELFIE:\s*[^\]]*\]/g, '').replace(/\[DRAW:\s*[^\]]*\]/g, '').replace(/<meta>[\s\S]*?<\/meta>/g, '').trim();
             const mi = currentMessages.findIndex(m => m.id === aiMsgId);
             if (mi >= 0) currentMessages[mi].content = display;
@@ -2178,9 +2223,9 @@ async function saveEdit(id) {
             _startTypingAnim(aiMsgId);
           } else if (data.type === 'cli_status') {
             _updateTypingStatus(aiMsgId, data.text);
-          } else if (data.type === 'chunk') {
+          } else if (data.type === 'chunk' || data.type === 'replace') {
             _stopTypingAnim();
-            aiContent += data.content;
+            aiContent = data.type === 'replace' ? data.content : aiContent + data.content;
             const display = aiContent.replace(/\[CAM_CHECK\]/g, '').replace(/\[POI_SEARCH:[^\]]*\]/g, '').replace(/\[MUSIC:[^\]]*\]/g, '').replace(/\[ALARM:[^\]]*\]/g, '').replace(/\[REMINDER:[^\]]*\]/g, '').replace(/\[Monitor:[^\]]*\]/g, '').replace(/\[SCHEDULE_DEL:[^\]]*\]/g, '').replace(/\[SCHEDULE_LIST\]/g, '').replace(/\[TOY:[^\]]*\]/g, '').replace(/\[HEART:[^\]]*\]/g, '').replace(/\[MEMORY:[^\]]*\]/g, '').replace(/\[查看动态:\d+\]/g, '').replace(/\[视频电话\]/g, '').replace(/\[SELFIE:\s*[^\]]*\]/g, '').replace(/\[DRAW:\s*[^\]]*\]/g, '').replace(/<meta>[\s\S]*?<\/meta>/g, '').trim();
             const mi = currentMessages.findIndex(m => m.id === aiMsgId);
             if (mi >= 0) currentMessages[mi].content = display;
@@ -2309,9 +2354,9 @@ async function regenerateMsg(aiMsgId) {
             currentMessages.push({ id: newId, conv_id: currentConvId, role: "assistant", content: "...", created_at: Date.now()/1000 });
             renderMessages();
             _startTypingAnim(newId);
-          } else if (d.type === "chunk") {
+          } else if (d.type === "chunk" || d.type === "replace") {
             _stopTypingAnim();
-            aiContent += d.content;
+            aiContent = d.type === "replace" ? d.content : aiContent + d.content;
             const display = aiContent.replace(/\[CAM_CHECK\]/g, '').replace(/\[POI_SEARCH:[^\]]*\]/g, '').replace(/\[MUSIC:[^\]]*\]/g, '').replace(/\[ALARM:[^\]]*\]/g, '').replace(/\[REMINDER:[^\]]*\]/g, '').replace(/\[Monitor:[^\]]*\]/g, '').replace(/\[SCHEDULE_DEL:[^\]]*\]/g, '').replace(/\[SCHEDULE_LIST\]/g, '').replace(/\[TOY:[^\]]*\]/g, '').replace(/\[HEART:[^\]]*\]/g, '').replace(/\[MEMORY:[^\]]*\]/g, '').replace(/\[查看动态:\d+\]/g, '').replace(/\[视频电话\]/g, '').replace(/\[SELFIE:\s*[^\]]*\]/g, '').replace(/\[DRAW:\s*[^\]]*\]/g, '').replace(/<meta>[\s\S]*?<\/meta>/g, '').trim();
             const mi = currentMessages.findIndex(m => m.id === newId);
             if (mi >= 0) currentMessages[mi].content = display;
@@ -3356,7 +3401,10 @@ async function fmSave() {
   }
 }
 
-init();
+init().then(() => {
+  // 初始化完成后自动打开 Home 作为默认页面
+  setTimeout(() => openSubPage('/'), 100);
+});
 
 // ── 摄像头/监控日志/记忆库 → 已拆分为独立页面 ──
 
@@ -3792,7 +3840,8 @@ async function _receiveGift(giftId) {
 })();
 
 // ── 子页面 iframe 浮层逻辑 ──
-const _subPageNames = {'/':'主页','/settings':'设置','/memory':'记忆库','/worldbook':'世界书','/schedule':'日程','/camera':'摄像头','/monitor-logs':'监控日志','/location':'定位','/heart-whispers':'心语'};
+let currentSubPage = null;
+const _subPageNames = {'/':'主页','/settings':'设置','/memory':'记忆库','/diary':'日记本','/worldbook':'世界书','/schedule':'日程','/camera':'摄像头','/monitor-logs':'监控日志','/location':'定位','/heart-whispers':'心语'};
 function parseSubPageColor(value) {
   if (!value || value === 'transparent') return null;
   const hexMatch = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -3870,14 +3919,16 @@ function openSubPage(url) {
   const f = $('subPageFrame');
   f.src = url;
   $('subPageOverlay').classList.add('show');
-  history.pushState({subPage: url}, '', '/chat');
+  currentSubPage = url;
 }
 document.getElementById('subPageFrame').addEventListener('load', () => {
   const f = $('subPageFrame');
   if (!f.src || f.src === 'about:blank') return;
-  try { syncSubPageMode(f.contentWindow.location.href); }
-  catch(e) { syncSubPageMode(f.src); }
-  syncSubPageChromeFromFrame();
+  requestAnimationFrame(() => {
+    try { syncSubPageMode(f.contentWindow.location.href); }
+    catch(e) { syncSubPageMode(f.src); }
+    syncSubPageChromeFromFrame();
+  });
 });
 function closeSubPage() {
   const ov = $('subPageOverlay');
@@ -3885,6 +3936,7 @@ function closeSubPage() {
   ov.classList.remove('show');
   ov.classList.remove('home-subpage');
   $('subPageFrame').src = 'about:blank';
+  currentSubPage = null;
   applyAionTheme(localStorage.getItem('aion_chat_theme') || document.body.dataset.theme || 'dark');
   // 回到聊天页后重新加载消息列表（拿到后台生成完成的新消息）
   if (currentConvId) {
@@ -3895,8 +3947,44 @@ function closeSubPage() {
     });
   }
 }
+// 导航到 Home（从任何功能页返回 Home）
+function navigateToHome() {
+  const path = (() => {
+    try { return new URL(currentSubPage || '', location.origin).pathname; } catch(e) { return currentSubPage || ''; }
+  })();
+  if (path === '/') return; // 已经在 Home
+  // 直接切换 iframe src，旧页面保持显示直到 Home 加载完成
+  $('subPageFrame').src = '/';
+  currentSubPage = '/';
+}
+// Android 原生返回键回调
+function handleNativeBack() {
+  const ov = $('subPageOverlay');
+  if (ov && ov.classList.contains('show')) {
+    const path = (() => {
+      try { return new URL(currentSubPage || '', location.origin).pathname; } catch(e) { return currentSubPage || ''; }
+    })();
+    if (path === '/') {
+      // 在 Home → 弹对话框
+      return 'dialog';
+    }
+    // 在其他功能页 → 回到 Home
+    navigateToHome();
+    return 'handled';
+  }
+  // 无浮层（Chat 聊天界面）→ 打开 Home
+  openSubPage('/');
+  return 'handled';
+}
 window.addEventListener('popstate', function(e) {
-  if ($('subPageOverlay').classList.contains('show')) { closeSubPage(); }
+  // 保留 popstate 以防浏览器产生历史条目，统一导航到 Home 或关闭
+  if ($('subPageOverlay').classList.contains('show')) {
+    const path = (() => {
+      try { return new URL(currentSubPage || '', location.origin).pathname; } catch(e) { return currentSubPage || ''; }
+    })();
+    if (path !== '/') navigateToHome();
+    else closeSubPage();
+  }
 });
 
 // ── 转账弹窗 ──

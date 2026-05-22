@@ -11,13 +11,17 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from config import DEFAULT_MODEL, DATA_DIR, SETTINGS
+from config import DEFAULT_MODEL, DATA_DIR, SETTINGS, THEATER_TTS_CACHE_DIR
 from database import get_db
 from ws import manager
 from ai_providers import stream_ai
 from tts import TTSStreamer
 
 router = APIRouter(prefix="/api/theater", tags=["theater"])
+
+THEATER_TTS_MIN_CHARS = 300
+THEATER_TTS_MAX_CHARS = 500
+THEATER_TTS_AUDIO_PREFIX = "/api/theater/tts/audio"
 
 # ── 角色预设文件路径 ──
 PERSONAS_PATH = DATA_DIR / "theater_personas.json"
@@ -40,17 +44,11 @@ def _save_personas(data: list):
 class PersonaCreate(BaseModel):
     name: str = "新角色"
     persona: str = ""
-    model: str = ""
-    temperature: float = 0.8
-    context_limit: int = 20
 
 
 class PersonaUpdate(BaseModel):
     name: Optional[str] = None
     persona: Optional[str] = None
-    model: Optional[str] = None
-    temperature: Optional[float] = None
-    context_limit: Optional[int] = None
 
 
 class ConvCreate(BaseModel):
@@ -94,9 +92,6 @@ async def create_persona(body: PersonaCreate):
         "id": str(uuid.uuid4())[:8],
         "name": body.name,
         "persona": body.persona,
-        "model": body.model,
-        "temperature": body.temperature,
-        "context_limit": body.context_limit,
         "created_at": time.time(),
     }
     personas.append(p)
@@ -113,12 +108,6 @@ async def update_persona(pid: str, body: PersonaUpdate):
                 p["name"] = body.name
             if body.persona is not None:
                 p["persona"] = body.persona
-            if body.model is not None:
-                p["model"] = body.model
-            if body.temperature is not None:
-                p["temperature"] = body.temperature
-            if body.context_limit is not None:
-                p["context_limit"] = body.context_limit
             _save_personas(personas)
             return p
     return {"error": "not found"}
@@ -302,15 +291,11 @@ async def send_message(conv_id: str, body: MsgCreate):
 
     # 加载角色人设
     persona_text = ""
-    persona_temp = body.temperature
+    temperature = body.temperature
     personas = _load_personas()
     for p in personas:
         if p["id"] == persona_id:
             persona_text = p.get("persona", "")
-            if body.temperature is None:
-                persona_temp = p.get("temperature", 0.8)
-            if p.get("model"):
-                model_key = p["model"]
             break
 
     # 构建 prompt：仅注入人设 + 上下文，干净纯粹
@@ -327,14 +312,22 @@ async def send_message(conv_id: str, body: MsgCreate):
 
     tts_streamer = None
     if body.tts_enabled and body.tts_voice:
-        tts_streamer = TTSStreamer(ai_msg_id, body.tts_voice, manager)
+        tts_streamer = TTSStreamer(
+            ai_msg_id,
+            body.tts_voice,
+            manager,
+            min_chars=THEATER_TTS_MIN_CHARS,
+            max_chars=THEATER_TTS_MAX_CHARS,
+            cache_dir=THEATER_TTS_CACHE_DIR,
+            audio_url_prefix=THEATER_TTS_AUDIO_PREFIX,
+        )
 
     async def _bg_generate():
         full_text = ""
         try:
             await _q.put({"id": ai_msg_id, "type": "start"})
             try:
-                async for chunk in stream_ai(history, model_key, usage_meta, temperature=persona_temp):
+                async for chunk in stream_ai(history, model_key, usage_meta, temperature=temperature):
                     full_text += chunk
                     await _q.put({"type": "chunk", "content": chunk})
                     if tts_streamer:
@@ -426,15 +419,10 @@ async def regenerate_message(conv_id: str, context_limit: int = 20, temperature:
 
     # 加载角色人设
     persona_text = ""
-    persona_temp = temperature
     personas = _load_personas()
     for p in personas:
         if p["id"] == persona_id:
             persona_text = p.get("persona", "")
-            if temperature is None:
-                persona_temp = p.get("temperature", 0.8)
-            if p.get("model"):
-                model_key = p["model"]
             break
 
     prefix = []
@@ -450,14 +438,22 @@ async def regenerate_message(conv_id: str, context_limit: int = 20, temperature:
 
     tts_streamer = None
     if tts_enabled and tts_voice:
-        tts_streamer = TTSStreamer(ai_msg_id, tts_voice, manager)
+        tts_streamer = TTSStreamer(
+            ai_msg_id,
+            tts_voice,
+            manager,
+            min_chars=THEATER_TTS_MIN_CHARS,
+            max_chars=THEATER_TTS_MAX_CHARS,
+            cache_dir=THEATER_TTS_CACHE_DIR,
+            audio_url_prefix=THEATER_TTS_AUDIO_PREFIX,
+        )
 
     async def _bg_generate():
         full_text = ""
         try:
             await _q.put({"id": ai_msg_id, "type": "start"})
             try:
-                async for chunk in stream_ai(history, model_key, usage_meta, temperature=persona_temp):
+                async for chunk in stream_ai(history, model_key, usage_meta, temperature=temperature):
                     full_text += chunk
                     await _q.put({"type": "chunk", "content": chunk})
                     if tts_streamer:

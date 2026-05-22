@@ -36,6 +36,7 @@ from routes import schedule as schedule_routes
 from routes import location as location_routes
 from routes import heart_whispers as heart_whispers_routes
 from routes import moments as moments_routes
+from routes import diary as diary_routes
 from routes import activity as activity_routes
 from routes import book as book_routes
 from routes import theater as theater_routes
@@ -175,6 +176,7 @@ app.include_router(schedule_routes.router)
 app.include_router(location_routes.router)
 app.include_router(heart_whispers_routes.router)
 app.include_router(moments_routes.router)
+app.include_router(diary_routes.router)
 app.include_router(activity_routes.router)
 app.include_router(book_routes.router)
 app.include_router(theater_routes.router)
@@ -233,6 +235,10 @@ async def heart_whispers_page():
 @app.get("/moments")
 async def moments_page():
     return FileResponse(BASE_DIR / "static" / "moments.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
+@app.get("/diary")
+async def diary_page():
+    return FileResponse(BASE_DIR / "static" / "diary.html", headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 @app.get("/activity-logs")
 async def activity_logs_page():

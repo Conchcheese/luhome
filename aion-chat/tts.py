@@ -6,6 +6,7 @@
 """
 
 import re, asyncio, logging
+from pathlib import Path
 import httpx
 
 from config import get_key, TTS_CACHE_DIR
@@ -28,6 +29,7 @@ _STRIP_PATTERNS = [
     re.compile(r'\[查看动态:\d+\]'),
     re.compile(r'\[SELFIE:[^\]]*\]'),
     re.compile(r'\[DRAW:[^\]]*\]'),
+    re.compile(r'\[悄悄话[：:][^\]]*\]'),
     re.compile(r'<meta>[\s\S]*?</meta>'),
 ]
 
@@ -59,11 +61,27 @@ def _has_unclosed_tag(text: str) -> bool:
 class TTSStreamer:
     """服务端流式 TTS：积累文本 → 按句子切分 → 异步合成 → WS/Queue 推送"""
 
-    def __init__(self, msg_id: str, voice: str, ws_manager=None, *, sse_queue: asyncio.Queue | None = None):
+    def __init__(
+        self,
+        msg_id: str,
+        voice: str,
+        ws_manager=None,
+        *,
+        sse_queue: asyncio.Queue | None = None,
+        min_chars: int = 100,
+        max_chars: int = 200,
+        cache_dir: Path | None = None,
+        audio_url_prefix: str = "/api/tts/audio",
+    ):
         self.msg_id = msg_id
         self.voice = voice
         self._ws = ws_manager
         self._sse_queue = sse_queue
+        self._min_chars = max(1, min_chars)
+        self._max_chars = max(self._min_chars, max_chars)
+        self._cache_dir = cache_dir or TTS_CACHE_DIR
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        self._audio_url_prefix = audio_url_prefix.rstrip("/")
         self._buffer = ""       # 原始文本缓冲
         self._seq = 0           # 分段序号
         self._tasks: list[asyncio.Task] = []
@@ -89,10 +107,9 @@ class TTSStreamer:
 
             # 先清除标签，计算纯文本长度
             clean = _strip_tags(self._buffer)
-            if len(clean) < 100:
+            if len(clean) < self._min_chars:
                 break
 
-            # 从第100个纯文字对应的原始位置开始找切分点
             cut_pos = self._find_cut_position()
             if cut_pos is None:
                 break
@@ -107,7 +124,7 @@ class TTSStreamer:
     def _find_cut_position(self) -> int | None:
         """
         在原始 buffer 中找到切分位置。
-        逻辑：纯文本到达 100 字后，开始找句号；最远到 200 字，找逗号；200 字还没有就强切。
+        逻辑：纯文本到达 min_chars 后，开始找句号；最远到 max_chars，找逗号；还没有就强切。
         返回原始 buffer 中的切分索引。
         """
         clean_count = 0     # 已累积的纯文字数
@@ -143,7 +160,7 @@ class TTSStreamer:
             # 计数纯文字
             clean_count += 1
 
-            if clean_count >= 100:
+            if clean_count >= self._min_chars:
                 if ch in _SENTENCE_ENDS:
                     # 找到句子结束符，检查省略号（…或...连续的情况）
                     best_sentence_cut = i
@@ -152,7 +169,7 @@ class TTSStreamer:
                 if ch in _COMMA_CHARS:
                     best_comma_cut = i
 
-            if clean_count >= 200:
+            if clean_count >= self._max_chars:
                 # 到达上限，优先逗号，否则强切当前位置
                 if best_comma_cut is not None:
                     return best_comma_cut
@@ -196,24 +213,29 @@ class TTSStreamer:
 
         chunk_name = f"{safe_id}_s{seq}"
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(
-                    "https://api.siliconflow.cn/v1/audio/speech",
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                    json={
-                        "model": "FunAudioLLM/CosyVoice2-0.5B",
-                        "input": text,
-                        "voice": self.voice,
-                        "response_format": "mp3",
-                        "speed": 1.0,
-                        "gain": 0
-                    }
-                )
-            if resp.status_code != 200:
-                log.warning("TTS API 错误: status=%d seq=%d", resp.status_code, seq)
+            resp = None
+            for attempt in range(3):
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.post(
+                        "https://api.siliconflow.cn/v1/audio/speech",
+                        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                        json={
+                            "model": "FunAudioLLM/CosyVoice2-0.5B",
+                            "input": text,
+                            "voice": self.voice,
+                            "response_format": "mp3",
+                            "speed": 1.0,
+                            "gain": 0
+                        }
+                    )
+                if resp.status_code == 200:
+                    break
+                log.warning("TTS API 错误: status=%d seq=%d attempt=%d", resp.status_code, seq, attempt + 1)
+                await asyncio.sleep(0.5 * (attempt + 1))
+            if not resp or resp.status_code != 200:
                 return
 
-            cache_path = TTS_CACHE_DIR / f"{chunk_name}.mp3"
+            cache_path = self._cache_dir / f"{chunk_name}.mp3"
             cache_path.write_bytes(resp.content)
 
             await self._notify({
@@ -221,7 +243,7 @@ class TTSStreamer:
                 "data": {
                     "msg_id": self.msg_id,
                     "seq": seq,
-                    "url": f"/api/tts/audio/{chunk_name}"
+                    "url": f"{self._audio_url_prefix}/{chunk_name}"
                 }
             })
             log.info("TTS chunk pushed: msg=%s seq=%d len=%d", self.msg_id, seq, len(text))

@@ -821,7 +821,7 @@ body[data-theme="light"] .msg-row.system .system-notice { background: rgba(0,0,0
 .toy-ls .del { background:none; border:none; color:#ff6b81; cursor:pointer; font-size:14px; padding:0 2px; }
 .toy-add-step { width:100%; padding:7px; border:1px dashed var(--border); border-radius:7px; background:none; color:var(--text3); cursor:pointer; font-size:11px; margin-top:3px; }
 /* ── 子页面 iframe 浮层 ── */
-#subPageOverlay { --subpage-safe-top:34px; --subpage-safe-bg:#fff9f5; --subpage-frame-bg:#fff9f5; position:fixed; inset:0; z-index:9999; background:transparent; display:none; flex-direction:column; padding-top:var(--subpage-safe-top); isolation:isolate; }
+#subPageOverlay { --subpage-safe-top:34px; --subpage-safe-bg:#fff9f5; --subpage-frame-bg:#fff9f5; position:fixed; inset:0; z-index:9999; background:var(--subpage-frame-bg); display:none; flex-direction:column; padding-top:var(--subpage-safe-top); isolation:isolate; }
 #subPageOverlay.show { display:flex; }
 #subPageOverlay.home-subpage { padding-top:0; background:transparent; }
 #subPageOverlay::before {

@@ -66,11 +66,11 @@ function getSolidVisualColor(foregroundValue, backgroundValue) {
   });
 }
 
-// 在 iframe 子页面浮层中时，返回按钮改为关闭浮层回到聊天页
+// 在 iframe 子页面浮层中时，返回按钮改为回到 Home 页面
 if (window.parent !== window) {
   document.addEventListener('DOMContentLoaded', () => {
     const backBtn = document.querySelector('.top-bar .back-btn');
-    if (backBtn) backBtn.onclick = () => window.parent.closeSubPage();
+    if (backBtn) backBtn.onclick = () => window.parent.navigateToHome();
   });
 }
 

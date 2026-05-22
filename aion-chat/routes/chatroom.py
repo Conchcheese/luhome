@@ -30,7 +30,8 @@ from context_builder import (
     MUSIC_CMD_PATTERN, MOMENT_CMD_PATTERN, MEMORY_CMD_PATTERN,
     ACTIVITY_CHECK_PATTERN, SELFIE_CMD_PATTERN, DRAW_CMD_PATTERN,
     POI_SEARCH_PATTERN, TOY_CMD_PATTERN, PET_CMD_PATTERN,
-    VIDEO_CALL_CMD, META_TAG_PATTERN, strip_tool_commands,
+    PRIVATE_WHISPER_CMD_PATTERN, VIDEO_CALL_CMD, META_TAG_PATTERN, strip_tool_commands,
+    append_message_meta,
 )
 from memory import get_embedding
 from schedule import process_schedule_commands, ALARM_CMD, REMINDER_CMD, MONITOR_CMD, _parse_dt
@@ -39,7 +40,7 @@ from camera import cam, CAM_CHECK_CMD
 
 router = APIRouter(prefix="/api/chatroom", tags=["chatroom"])
 
-TRANSFER_CMD_PATTERN = re.compile(r'\[转账[：:]\s*(-?\d+(?:\.\d+)?)\s*元\]')
+TRANSFER_CMD_PATTERN = re.compile(r'\[转账(?:给([^：:]+?))?[：:]\s*(-?\d+(?:\.\d+)?)\s*元\]')
 
 
 # ══════════════════════════════════════════════════
@@ -119,6 +120,113 @@ def _prefix_for_sender(sender: str) -> str:
     return ""
 
 
+def _render_recent_room_messages_for_ai(msgs: list[dict]) -> list[dict]:
+    """把聊天室临时上下文渲染为带精确时间 meta 的 AI messages。"""
+    recent = []
+    for m in msgs:
+        role = "assistant" if m.get("sender") in ("aion", "connor") else "user"
+        prefix = _prefix_for_sender(m.get("sender", ""))
+        content = append_message_meta(prefix + (m.get("content") or ""), m.get("created_at"), "聊天室")
+        recent.append({"role": role, "content": content})
+    return recent
+
+
+async def _get_room_type(room_id: str) -> str:
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT type FROM chatroom_rooms WHERE id=?", (room_id,))
+        row = await cur.fetchone()
+    return row["type"] if row else ""
+
+
+async def _get_or_create_aion_private_conv() -> str:
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT id FROM conversations ORDER BY updated_at DESC LIMIT 1")
+        row = await cur.fetchone()
+        if row:
+            return row["id"]
+
+        now = time.time()
+        conv_id = f"conv_{time.time_ns()}"
+        await db.execute(
+            "INSERT INTO conversations (id, title, model, created_at, updated_at) VALUES (?,?,?,?,?)",
+            (conv_id, "悄悄话", DEFAULT_MODEL, now, now),
+        )
+        await db.commit()
+
+    conv = {"id": conv_id, "title": "悄悄话", "model": DEFAULT_MODEL, "created_at": now, "updated_at": now}
+    await manager.broadcast({"type": "conv_created", "data": conv})
+    return conv_id
+
+
+async def _send_aion_private_whisper(content: str):
+    content = content.strip()
+    if not content:
+        return
+
+    conv_id = await _get_or_create_aion_private_conv()
+    now = time.time()
+    msg_id = f"msg_{time.time_ns()}_whisper"
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO messages (id, conv_id, role, content, created_at, attachments) VALUES (?,?,?,?,?,?)",
+            (msg_id, conv_id, "assistant", content, now, "[]"),
+        )
+        await db.execute("UPDATE conversations SET updated_at=? WHERE id=?", (now, conv_id))
+        await db.commit()
+
+    msg = {"id": msg_id, "conv_id": conv_id, "role": "assistant", "content": content, "created_at": now, "attachments": []}
+    await manager.broadcast({"type": "msg_created", "data": msg})
+
+
+async def _get_or_create_connor_private_room() -> str:
+    async with get_db() as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            "SELECT id FROM chatroom_rooms WHERE type = 'connor_1v1' ORDER BY updated_at DESC LIMIT 1"
+        )
+        row = await cur.fetchone()
+        if row:
+            return row["id"]
+
+        now = time.time()
+        room_id = f"cr_{time.time_ns()}"
+        connor_name = _name_for_identity("connor")
+        title = f"和 {connor_name} 私聊"
+        await db.execute(
+            "INSERT INTO chatroom_rooms (id, title, type, aion_persona, connor_persona, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (room_id, title, "connor_1v1", "", "", now, now),
+        )
+        await db.commit()
+
+    room = {
+        "id": room_id, "title": title, "type": "connor_1v1",
+        "aion_persona": "", "connor_persona": "",
+        "context_minutes": 30, "ai_chat_rounds": 1,
+        "created_at": now, "updated_at": now, "message_count": 0,
+    }
+    await manager.broadcast({"type": "chatroom_room_created", "data": room})
+    return room_id
+
+
+async def _send_connor_private_whisper(content: str):
+    content = content.strip()
+    if not content:
+        return
+
+    private_room_id = await _get_or_create_connor_private_room()
+    await _save_msg(private_room_id, "connor", content, msg_id=f"cm_{time.time_ns()}_w")
+
+
+async def _send_private_whisper(who_identity: str, content: str):
+    if who_identity == "connor":
+        await _send_connor_private_whisper(content)
+    else:
+        await _send_aion_private_whisper(content)
+
+
 async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg_id: str, _q: asyncio.Queue) -> tuple[str, dict]:
     """处理 AI 回复中的工具指令，执行副作用，返回 (清理后的文本, 触发的后续动作信息)。
     who: 'Aion' 或 'Connor'"""
@@ -126,6 +234,18 @@ async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg
     triggered = {}  # 收集需要后续处理的动作
     who_identity = "connor" if who.lower() == "connor" else "aion"
     who_label = _name_for_identity(who_identity)
+
+    # ── 群聊悄悄话：只在 group 房间生效，内容投递到各自私聊窗口 ──
+    private_whispers = PRIVATE_WHISPER_CMD_PATTERN.findall(full_text)
+    if private_whispers:
+        full_text = PRIVATE_WHISPER_CMD_PATTERN.sub("", full_text)
+        if await _get_room_type(room_id) == "group":
+            for whisper_text in private_whispers:
+                try:
+                    await _send_private_whisper(who_identity, whisper_text)
+                    print(f"[CHATROOM_WHISPER] {who_label} -> private: {whisper_text[:80]}")
+                except Exception as e:
+                    print(f"[CHATROOM_WHISPER] 发送失败: {e}")
 
     # ── 点歌 ──
     music_matches = MUSIC_CMD_PATTERN.findall(full_text)
@@ -149,7 +269,7 @@ async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg
         await _chatroom_sys_msg(room_id, f"🎵 {who_label}点了一首{' / '.join(parts)}", _q)
         music_data = {"type": "music", "msg_id": msg_id, "cards": music_cards, "autoplay": True}
         await _q.put(music_data)
-        await ws_manager.broadcast({"type": "music", "data": music_data})
+        await ws_manager.broadcast({"type": "music", "data": {**music_data, "source": "chatroom"}})
 
     # ── 日程/闹钟（先检测指令生成系统消息，再交给 schedule 模块处理） ──
     for match in ALARM_CMD.finditer(full_text):
@@ -210,27 +330,30 @@ async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg
         for mt_content, mt_reply in moment_matches:
             mt_content = mt_content.strip()
             if mt_content:
-                mt_now = time.time()
-                mt_id = f"mt_{int(mt_now*1000)}"
-                # who 是显示名，需要转为内部标识
-                author = "connor" if who.lower() == "connor" else "aion"
-                expect = 1 if mt_reply == "true" else 0
-                async with get_db() as mt_db:
-                    await mt_db.execute(
-                        "INSERT INTO moments (id, author, content, source_conv, source_msg_id, expect_reply, created_at) VALUES (?,?,?,?,?,?,?)",
-                        (mt_id, author, mt_content, f"chatroom:{room_id}", msg_id, expect, mt_now)
-                    )
-                    await mt_db.commit()
-                mt_data = {"type": "moment_new", "data": {
-                    "id": mt_id, "author": author, "content": mt_content,
-                    "expect_reply": expect, "created_at": mt_now,
-                    "comments": [], "reactions": [],
-                }}
-                await _q.put(mt_data)
-                await ws_manager.broadcast(mt_data)
-                if expect:
-                    from routes.moments import _trigger_ai_replies
-                    asyncio.create_task(_trigger_ai_replies(mt_id, exclude_author=author))
+                try:
+                    mt_now = time.time()
+                    mt_id = f"mt_{int(mt_now*1000)}"
+                    # who 是显示名，需要转为内部标识
+                    author = "connor" if who.lower() == "connor" else "aion"
+                    expect = 1 if mt_reply == "true" else 0
+                    async with get_db() as mt_db:
+                        await mt_db.execute(
+                            "INSERT INTO moments (id, author, content, source_conv, source_msg_id, expect_reply, created_at) VALUES (?,?,?,?,?,?,?)",
+                            (mt_id, author, mt_content, f"chatroom:{room_id}", msg_id, expect, mt_now)
+                        )
+                        await mt_db.commit()
+                    mt_data = {"type": "moment_new", "data": {
+                        "id": mt_id, "author": author, "content": mt_content,
+                        "expect_reply": expect, "created_at": mt_now,
+                        "comments": [], "reactions": [],
+                    }}
+                    await _q.put(mt_data)
+                    await ws_manager.broadcast(mt_data)
+                    if expect:
+                        from routes.moments import _trigger_ai_replies
+                        asyncio.create_task(_trigger_ai_replies(mt_id, exclude_author=author))
+                except Exception as e:
+                    print(f"[CHATROOM_MOMENT] 发布失败: {e}")
 
     # ── MEMORY ──
     memory_matches = MEMORY_CMD_PATTERN.findall(full_text)
@@ -239,16 +362,21 @@ async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg
         for mem_content in memory_matches:
             mem_content = mem_content.strip()
             if mem_content:
-                from memory import _pack_embedding
-                mem_now = time.time()
-                mem_id = f"mem_{int(mem_now*1000)}"
-                vec = await get_embedding(mem_content)
-                # 保存到聊天室记忆库
-                await save_chatroom_memory(
-                    room_id=room_id, scope="group", content=mem_content,
-                    keywords="", importance=0.5,
-                )
-                await _chatroom_sys_msg(room_id, f"💾 {who_label}记住了：{mem_content[:50]}", _q)
+                try:
+                    # 根据房间类型决定 scope
+                    async with get_db() as _mem_db:
+                        _mem_db.row_factory = aiosqlite.Row
+                        _cur = await _mem_db.execute("SELECT type FROM chatroom_rooms WHERE id=?", (room_id,))
+                        _room_row = await _cur.fetchone()
+                    _scope = "connor" if _room_row and _room_row["type"] == "connor_1v1" else "group"
+                    await save_chatroom_memory(
+                        room_id=room_id, scope=_scope, content=mem_content,
+                        keywords="", importance=0.5,
+                    )
+                    await _chatroom_sys_msg(room_id, f"💾 {who_label}记住了：{mem_content[:50]}", _q)
+                    print(f"[CHATROOM_MEMORY] {who_label} 录入记忆: {mem_content[:80]}")
+                except Exception as e:
+                    print(f"[CHATROOM_MEMORY] 录入失败: {e}")
 
     # ── POI 搜索 ──
     poi_matches = POI_SEARCH_PATTERN.findall(full_text)
@@ -270,22 +398,34 @@ async def _process_chatroom_commands(full_text: str, room_id: str, who: str, msg
         full_text = PET_CMD_PATTERN.sub("", full_text)
         await ws_manager.broadcast({"type": "pet_command", "data": {"action": pet_matches[-1].lower()}})
 
-    # ── Connor 钱包转账（AI 侧） ──
+    # ── 钱包转账（AI 侧） ──
     transfer_matches = TRANSFER_CMD_PATTERN.findall(full_text)
-    for t_amount_str in transfer_matches:
+    for t_recipient, t_amount_str in transfer_matches:
         try:
             t_val = float(t_amount_str)
-            if t_val > 0 and who.lower() == "connor":
-                async with get_db() as t_db:
-                    t_now = time.time()
-                    t_id = f"cwt_{int(t_now*1000)}"
-                    await t_db.execute(
-                        "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
-                        (t_id, 'connor_wallet_ai', -t_val, f'{who_label}转账给用户 {t_val}元', t_now)
-                    )
-                    await t_db.commit()
-                await ws_manager.broadcast({"type": "connor_wallet_update"})
-                print(f"[CONNOR_WALLET] {who_label} 转账: -{t_val}元")
+            if t_val > 0:
+                if who.lower() == "connor":
+                    async with get_db() as t_db:
+                        t_now = time.time()
+                        t_id = f"cwt_{int(t_now*1000)}"
+                        await t_db.execute(
+                            "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
+                            (t_id, 'connor_wallet_ai', -t_val, f'{who_label}转账给用户 {t_val}元', t_now)
+                        )
+                        await t_db.commit()
+                    await ws_manager.broadcast({"type": "connor_wallet_update"})
+                    print(f"[CONNOR_WALLET] {who_label} 转账: -{t_val}元")
+                elif who.lower() == "aion":
+                    async with get_db() as t_db:
+                        t_now = time.time()
+                        t_id = f"wt_{int(t_now*1000)}"
+                        await t_db.execute(
+                            "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
+                            (t_id, 'wallet_ai', -t_val, f'{who_label}转账给用户 {t_val}元', t_now)
+                        )
+                        await t_db.commit()
+                    await ws_manager.broadcast({"type": "wallet_update"})
+                    print(f"[WALLET] {who_label} 转账: -{t_val}元")
         except (ValueError, Exception):
             pass
 
@@ -351,11 +491,7 @@ async def _chatroom_cam_check(room_id: str, sender: str, model_key: str, delay: 
 
     # 获取聊天室最近消息作为上下文
     _, msgs = await _load_room_and_messages(room_id, limit=10)
-    recent = []
-    for m in msgs:
-        role = "assistant" if m["sender"] in ("aion", "connor") else "user"
-        prefix = _prefix_for_sender(m["sender"])
-        recent.append({"role": role, "content": prefix + (m.get("content") or "")})
+    recent = _render_recent_room_messages_for_ai(msgs)
 
     cam_prompt = (
         f"你刚才想看看{user_name}在干什么，这是系统从监控摄像头抓取的实时画面。"
@@ -415,11 +551,7 @@ async def _chatroom_activity_check(room_id: str, sender: str, model_key: str, n:
 
     # 获取聊天室最近消息作为上下文
     _, msgs = await _load_room_and_messages(room_id, limit=10)
-    recent = []
-    for m in msgs:
-        role = "assistant" if m["sender"] in ("aion", "connor") else "user"
-        prefix = _prefix_for_sender(m["sender"])
-        recent.append({"role": role, "content": prefix + (m.get("content") or "")})
+    recent = _render_recent_room_messages_for_ai(msgs)
 
     activity_prompt = (
         f"你刚才想了解{user_name}最近在干什么，以下是系统采集到的{user_name}过去{minutes}分钟的设备使用动态（每10分钟一条摘要）：\n\n"
@@ -535,11 +667,7 @@ async def _chatroom_poi_check(room_id: str, sender: str, model_key: str, categor
     )
 
     _, msgs = await _load_room_and_messages(room_id, limit=10)
-    recent = []
-    for m in msgs:
-        role = "assistant" if m["sender"] in ("aion", "connor") else "user"
-        prefix = _prefix_for_sender(m["sender"])
-        recent.append({"role": role, "content": prefix + (m.get("content") or "")})
+    recent = _render_recent_room_messages_for_ai(msgs)
 
     prefix_msgs = []
     if wb.get("ai_persona") and sender == "aion":
@@ -837,7 +965,7 @@ async def create_room(body: RoomCreate):
     room = {
         "id": room_id, "title": body.title, "type": body.type,
         "aion_persona": body.aion_persona, "connor_persona": body.connor_persona,
-        "context_minutes": 30, "ai_chat_rounds": 3,
+        "context_minutes": 30, "ai_chat_rounds": 1,
         "created_at": now, "updated_at": now, "message_count": 0,
     }
     await manager.broadcast({"type": "chatroom_room_created", "data": room})
@@ -990,22 +1118,40 @@ async def send_message(room_id: str, body: MsgSend):
     save_atts = body.voice_attachments if body.voice_attachments else body.attachments
     user_msg = await _save_msg(room_id, "user", body.content, attachments=save_atts)
 
-    # 检测用户消息中的 [转账：N元] → Connor 钱包入账
+    # 检测用户消息中的 [转账给XXX：N元] 或 [转账：N元] → 根据收款人路由到对应钱包
     if body.content:
         user_transfer_matches = TRANSFER_CMD_PATTERN.findall(body.content)
-        for t_amount_str in user_transfer_matches:
+        _, ai_name, connor_name = get_chatroom_names()
+        for t_recipient, t_amount_str in user_transfer_matches:
             try:
                 t_val = float(t_amount_str)
-                async with get_db() as t_db:
-                    t_now = time.time()
-                    t_id = f"cwt_{int(t_now*1000)}"
-                    await t_db.execute(
-                        "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
-                        (t_id, 'connor_wallet_user', t_val, f'用户转账 {t_val}元', t_now)
-                    )
-                    await t_db.commit()
-                await manager.broadcast({"type": "connor_wallet_update"})
-                print(f"[CONNOR_WALLET] 用户转账: {t_val}元")
+                # 判断收款人：匹配 Aion 名字则进 Aion 钱包，否则默认 Connor 钱包
+                recipient_stripped = (t_recipient or "").strip()
+                is_aion = recipient_stripped and recipient_stripped == ai_name
+                if is_aion:
+                    # Aion 钱包
+                    async with get_db() as t_db:
+                        t_now = time.time()
+                        t_id = f"wt_{int(t_now*1000)}"
+                        await t_db.execute(
+                            "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
+                            (t_id, 'wallet_user', t_val, f'用户转账给{ai_name} {t_val}元', t_now)
+                        )
+                        await t_db.commit()
+                    await manager.broadcast({"type": "wallet_update"})
+                    print(f"[WALLET] 用户转账给{ai_name}: {t_val}元")
+                else:
+                    # Connor 钱包（默认）
+                    async with get_db() as t_db:
+                        t_now = time.time()
+                        t_id = f"cwt_{int(t_now*1000)}"
+                        await t_db.execute(
+                            "INSERT INTO bookkeeping (id, record_type, amount, description, created_at) VALUES (?,?,?,?,?)",
+                            (t_id, 'connor_wallet_user', t_val, f'用户转账给{connor_name} {t_val}元', t_now)
+                        )
+                        await t_db.commit()
+                    await manager.broadcast({"type": "connor_wallet_update"})
+                    print(f"[CONNOR_WALLET] 用户转账给{connor_name}: {t_val}元")
             except (ValueError, Exception):
                 pass
 
@@ -1022,6 +1168,8 @@ async def send_message(room_id: str, body: MsgSend):
         # 群聊：两侧都更新为群聊
         manager.set_aion_last_active(f"chatroom:{room_id}")
         manager.set_connor_last_active(room_id)
+        # 用户在 Aion 参与的群聊发消息时，也视为正在聊天，推迟哨兵巡逻。
+        cam.reset_patrol_timer()
     elif room_type == "connor_1v1":
         # Connor 私聊：仅更新 Connor 侧
         manager.set_connor_last_active(room_id)
@@ -1074,6 +1222,7 @@ async def _generate_connor_reply(room_id, room, msgs, _q, context_minutes, *, tt
 
     connor_messages, _ = await build_connor_1v1_context(
         room_id, msgs, connor_persona,
+        context_minutes=context_minutes,
         query_text=query_text,
         whisper_mode=whisper_mode,
     )
@@ -1101,11 +1250,18 @@ async def _generate_connor_reply(room_id, room, msgs, _q, context_minutes, *, tt
         full_text = f"{connor_label} 暂时无法回复，请稍后再试。"
 
     # 工具指令处理（从文本中剥离并执行，与群聊保持一致）
-    clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Connor", connor_msg_id, _q)
+    try:
+        clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Connor", connor_msg_id, _q)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[CHATROOM] _process_chatroom_commands 异常: {e}")
+        clean_text = strip_tool_commands(full_text)
+        triggered = {}
 
     # TTS 用干净文本
     if tts_enabled and tts_connor_voice and clean_text:
-        tts = TTSStreamer(connor_msg_id, tts_connor_voice, sse_queue=_q)
+        tts = TTSStreamer(connor_msg_id, tts_connor_voice, manager, sse_queue=_q)
         tts.feed(clean_text)
         await tts.flush()
 
@@ -1169,11 +1325,18 @@ async def _reply_aion(room_id, msgs, aion_persona, context_minutes, query_text, 
         await _q.put({"type": "aion_chunk", "content": f"\n[回复出错: {e}]"})
 
     # 工具指令处理（从文本中剥离并执行）
-    clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Aion", aion_msg_id, _q)
+    try:
+        clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Aion", aion_msg_id, _q)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[CHATROOM] _process_chatroom_commands 异常: {e}")
+        clean_text = strip_tool_commands(full_text)
+        triggered = {}
 
     # TTS 用干净文本
     if tts_enabled and tts_voice and clean_text:
-        tts = TTSStreamer(aion_msg_id, tts_voice, sse_queue=_q)
+        tts = TTSStreamer(aion_msg_id, tts_voice, manager, sse_queue=_q)
         tts.feed(clean_text)
         await tts.flush()
 
@@ -1217,11 +1380,18 @@ async def _reply_connor(room_id, msgs, connor_persona, context_minutes, query_te
         full_text = f"{connor_label} 暂时无法回复，请稍后再试。"
 
     # 工具指令处理
-    clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Connor", connor_msg_id, _q)
+    try:
+        clean_text, triggered = await _process_chatroom_commands(full_text, room_id, "Connor", connor_msg_id, _q)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[CHATROOM] _process_chatroom_commands 异常: {e}")
+        clean_text = strip_tool_commands(full_text)
+        triggered = {}
 
     # TTS 用干净文本
     if tts_enabled and tts_voice and clean_text:
-        tts = TTSStreamer(connor_msg_id, tts_voice, sse_queue=_q)
+        tts = TTSStreamer(connor_msg_id, tts_voice, manager, sse_queue=_q)
         tts.feed(clean_text)
         await tts.flush()
 
@@ -1247,7 +1417,7 @@ async def trigger_ai_chat(room_id: str, body: AiChatTrigger):
     if not room:
         return {"error": "房间不存在"}
 
-    max_rounds = body.rounds or room.get("ai_chat_rounds", 3)
+    max_rounds = body.rounds or room.get("ai_chat_rounds", 1)
     model_key = body.model
     context_minutes = room.get("context_minutes", 30)
     aion_persona = room.get("aion_persona", "")

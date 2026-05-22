@@ -30,15 +30,16 @@ TOY_CMD_PATTERN = re.compile(r'\[TOY:(\d|STOP)\]')
 PET_CMD_PATTERN = re.compile(r'\[PET:([a-z_\-]+)\]', re.IGNORECASE)
 HOME_CMD_PATTERN = re.compile(r'\[HOME:([^\]]+)\]', re.IGNORECASE)
 TRANSFER_CMD_PATTERN = re.compile(r'\[转账[：:]\s*(-?\d+(?:\.\d+)?)\s*元\]')
+PRIVATE_WHISPER_CMD_PATTERN = re.compile(r'\[悄悄话[：:]\s*([^\]]+)\]')
 VIDEO_CALL_CMD = '[视频电话]'
-META_TAG_PATTERN = re.compile(r'\s*<meta>.*?</meta>', re.DOTALL)
+META_TAG_PATTERN = re.compile(r'\s*<meta\b[^>]*>.*?</meta\s*>', re.DOTALL | re.IGNORECASE)
 
 # 所有需要从 AI 回复中剥离的工具指令正则列表（TTS、保存时统一清理）
 _ALL_CMD_PATTERNS = [
     MUSIC_CMD_PATTERN, MOMENT_CMD_PATTERN, MEMORY_CMD_PATTERN,
     ACTIVITY_CHECK_PATTERN, SELFIE_CMD_PATTERN, DRAW_CMD_PATTERN,
     POI_SEARCH_PATTERN, TOY_CMD_PATTERN, PET_CMD_PATTERN,
-    HOME_CMD_PATTERN, TRANSFER_CMD_PATTERN,
+    HOME_CMD_PATTERN, TRANSFER_CMD_PATTERN, PRIVATE_WHISPER_CMD_PATTERN,
 ]
 
 HOME_ALIASES_HINT = (
@@ -59,6 +60,21 @@ def strip_tool_commands(text: str) -> str:
         text = text.replace(VIDEO_CALL_CMD, "")
     text = META_TAG_PATTERN.sub("", text)
     return text.strip()
+
+
+def format_message_time(created_at) -> str:
+    """把消息时间戳格式化为给模型看的精确本地时间。"""
+    dt = datetime.fromtimestamp(float(created_at))
+    return f"{dt.year}年{dt.month}月{dt.day}日 {dt.strftime('%H:%M:%S')}"
+
+
+def append_message_meta(content: str, created_at, label: str = "") -> str:
+    """清理旧 meta 后，为单条上下文消息追加发送时间 meta。"""
+    text = META_TAG_PATTERN.sub("", content or "").strip()
+    if created_at:
+        suffix = f" [{label}]" if label else ""
+        text += f"\n<meta>发送时间：{format_message_time(created_at)}{suffix}</meta>"
+    return text
 
 
 def _is_pet_available() -> bool:
@@ -83,6 +99,7 @@ async def build_ability_block(
     user_name: str,
     *,
     whisper_mode: bool = False,
+    include_private_whisper: bool = False,
     include_video_call: bool = True,
     include_image_gen: bool = True,
     who: str = "aion",
@@ -111,6 +128,11 @@ async def build_ability_block(
     )
     abilities.append("[SCHEDULE_DEL:日程id] — 删除指定日程/闹铃/定时监控。")
     abilities.append(HOME_ABILITY_TEXT)
+
+    if include_private_whisper:
+        abilities.append(
+            f"[悄悄话：内容] — 当你想私下和{user_name}说悄悄话，不让第3个人听见时，可以使用该指令。使用后会把“内容”发送到你和{user_name}的私聊窗口。不要在群聊正文里重复这段悄悄话。"
+        )
 
     if is_activity_tracking_enabled():
         abilities.append(
@@ -476,7 +498,7 @@ def render_merged_timeline(
     - 当存在混合来源时，仅在场景切换的那条消息内容前加一行内联标记，
       不再插入伪造的 user+assistant 应答对（避免制造 agent multi-turn 假象，
       Gemini 3 看到那种结构会切到 thinking 模式输出大段内心戏）。
-    - 每条消息末尾仍带 <meta>发送时间：xx [群聊/私聊]</meta>，模型仍能识别每条消息的来源。
+    - 每条消息末尾仍带 <meta>发送时间：年月日 时分秒 [群聊/私聊]</meta>，模型仍能识别每条消息的时间和来源。
     - 系统消息按关键词过滤
 
     返回 [{"role": ..., "content": ..., "attachments": ...}]
@@ -552,16 +574,12 @@ def render_merged_timeline(
                 content = f"[{other_name}]: {content}"
                 role = "user"
 
-        # ── 清洗 meta 标签 + 添加时间戳 ──
-        content = META_TAG_PATTERN.sub("", content).strip()
-        if msg.get("created_at"):
-            dt = datetime.fromtimestamp(msg["created_at"])
-            ts = f"{dt.month}月{dt.day}日 {dt.strftime('%H:%M')}"
-            if has_mixed:
-                label = "群聊" if source == "group" else "私聊"
-                content += f"\n<meta>发送时间：{ts} [{label}]</meta>"
-            else:
-                content += f"\n<meta>发送时间：{ts}</meta>"
+        # ── 清洗旧 meta 标签 + 添加精确时间戳 ──
+        if has_mixed:
+            label = "群聊" if source == "group" else "私聊"
+            content = append_message_meta(content, msg.get("created_at"), label)
+        else:
+            content = append_message_meta(content, msg.get("created_at"))
 
         # 把待写入的场景切换提示并入本条 content 开头
         if pending_scene_marker:
