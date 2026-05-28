@@ -684,7 +684,7 @@ class CameraMonitor:
         """把最近的手机屏幕截图缩到与电脑屏幕层同高，贴在左侧窄条。"""
         try:
             from phone_screen import get_recent_phone_screen_path
-            phone_path = get_recent_phone_screen_path(max_age_seconds=15)
+            phone_path = get_recent_phone_screen_path(max_age_seconds=150)
             if not phone_path:
                 return screen_frame
             phone = cv2.imread(str(phone_path))
@@ -713,7 +713,7 @@ class CameraMonitor:
         """PC 屏幕跳过时，仍保留手机截图所在的下方窄层。"""
         try:
             from phone_screen import get_recent_phone_screen_path
-            phone_path = get_recent_phone_screen_path(max_age_seconds=15)
+            phone_path = get_recent_phone_screen_path(max_age_seconds=150)
             if not phone_path:
                 return None
             phone = cv2.imread(str(phone_path))

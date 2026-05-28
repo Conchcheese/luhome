@@ -1407,6 +1407,7 @@ let replyConvId = null;
 let replyConnorRoomId = null;
 let replyGroupRoomId = null;
 let replySending = false;
+let replyAionModel = null;   // Aion 使用的模型，从主聊天同步
 
 // 渲染一条聊天气泡
 function renderChatBubble(role, content, who) {
@@ -1445,13 +1446,18 @@ async function openReplyPanel() {
   $('replyTitle').textContent = `💬 ${targetLabel}`;
 
   // 根据目标获取 room/conv ID
+  // 获取主聊天当前使用的模型
+  if (!replyAionModel) {
+    try {
+      const convs = await api('GET', '/api/conversations');
+      if (convs && convs.length > 0) {
+        replyAionModel = convs[0].model || null;
+        if (!replyConvId) replyConvId = convs[0].id;
+      }
+    } catch(e) {}
+  }
+
   if (askTarget === 'aion') {
-    if (!replyConvId) {
-      try {
-        const convs = await api('GET', '/api/conversations');
-        if (convs && convs.length > 0) replyConvId = convs[0].id;
-      } catch(e) {}
-    }
     if (!replyConvId) {
       showToast('没有可用的对话，请先在聊天页创建一个');
       return false;
@@ -1646,10 +1652,12 @@ async function doSendInPanel(msgContent, skipUserBubble, highlightMeta) {
     const cBody = cRow.querySelector('.rc-body');
 
     try {
+      const connorPayload = { content: msgContent };
+      if (replyAionModel) connorPayload.model = replyAionModel;
       const resp = await fetch(`/api/chatroom/rooms/${replyConnorRoomId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: msgContent })
+        body: JSON.stringify(connorPayload)
       });
       fullReply = await _streamChatroomToBody(resp, null, cBody, msgs);
     } catch(e) {
@@ -1682,10 +1690,12 @@ async function doSendInPanel(msgContent, skipUserBubble, highlightMeta) {
     msgs.scrollTop = msgs.scrollHeight;
 
     try {
+      const groupPayload = { content: msgContent };
+      if (replyAionModel) groupPayload.model = replyAionModel;
       const resp = await fetch(`/api/chatroom/rooms/${replyGroupRoomId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: msgContent })
+        body: JSON.stringify(groupPayload)
       });
       const results = await _streamChatroomToBody(resp, aBody, cBody, msgs);
       fullReply = results.aion || '';

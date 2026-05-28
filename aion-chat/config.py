@@ -182,7 +182,7 @@ MODELS = {
     "AGY-3.5flash":       {"provider": "antigravity_cli", "model": "gemini-3.5-flash"},
 }
 
-DEFAULT_MODEL = "gemini-3.1-lite"
+DEFAULT_MODEL = "Gemini-3.5-flash"
 
 # ── 摄像头默认配置 ───────────────────────────────
 DEFAULT_CAM_CFG = {

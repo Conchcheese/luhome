@@ -172,6 +172,32 @@ public class WebViewActivity extends AppCompatActivity {
                 return getSharedPreferences("aion_prefs", MODE_PRIVATE)
                         .getBoolean("phone_screen_supervision", false);
             }
+
+            @JavascriptInterface
+            public void openAccessibilitySettings() {
+                mainHandler.post(() -> {
+                    Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+                    startActivity(intent);
+                    Toast.makeText(WebViewActivity.this, "请在无障碍里开启 Aion Oloth", Toast.LENGTH_LONG).show();
+                });
+            }
+
+            @JavascriptInterface
+            public boolean isAccessibilityEnabled() {
+                return isAionAccessibilityEnabled();
+            }
+
+            @JavascriptInterface
+            public void testAccessibilityCapture() {
+                Intent serviceIntent = new Intent(WebViewActivity.this, AionPushService.class);
+                serviceIntent.putExtra("action", AionPushService.ACTION_TEST_ACCESSIBILITY_SCREEN);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent);
+                } else {
+                    startService(serviceIntent);
+                }
+                mainHandler.post(() -> Toast.makeText(WebViewActivity.this, "已触发无障碍截图测试", Toast.LENGTH_SHORT).show());
+            }
         }, "AionPhoneScreen");
 
         // 原生麦克风桥接（绕过 getUserMedia 的 HTTPS 限制）
@@ -396,6 +422,10 @@ public class WebViewActivity extends AppCompatActivity {
             targetUrl = "http://192.168.1.92:8080/chat";
         }
         webView.loadUrl(targetUrl);
+    }
+
+    private boolean isAionAccessibilityEnabled() {
+        return AionAccessibilityService.isEnabledInSettings(this);
     }
 
     /**

@@ -14,23 +14,30 @@ from config import DATA_DIR, UPLOADS_DIR
 PHONE_SCREEN_DIR = DATA_DIR / "phone_screens"
 PHONE_SCREEN_DIR.mkdir(parents=True, exist_ok=True)
 PHONE_SCREEN_META = PHONE_SCREEN_DIR / "latest.json"
-
-MAX_KEEP = 50
+LATEST_FILENAME = "phone_screen_latest.jpg"
 
 
 def _safe_ts(ts: float | None = None) -> str:
     return time.strftime("%Y%m%d_%H%M%S", time.localtime(ts or time.time()))
 
 
-def save_phone_screen_b64(image_base64: str, *, timestamp: float | None = None, app: str = "", locked: bool = False) -> dict:
-    """保存 Android 上传的手机屏幕截图，返回可给前端/模型使用的路径信息。"""
+def save_phone_screen_b64(
+    image_base64: str,
+    *,
+    timestamp: float | None = None,
+    app: str = "",
+    locked: bool = False,
+    source: str = "",
+    reason: str = "",
+) -> dict:
+    """保存 Android 上传的手机屏幕截图，只保留最新一张。"""
     raw = image_base64.strip()
     if "," in raw and raw.lower().startswith("data:"):
         raw = raw.split(",", 1)[1]
     data = base64.b64decode(raw)
 
     ts = timestamp or time.time()
-    fname = f"phone_screen_{_safe_ts(ts)}_{int(ts * 1000) % 1000:03d}.jpg"
+    fname = LATEST_FILENAME
     path = PHONE_SCREEN_DIR / fname
     path.write_bytes(data)
 
@@ -46,6 +53,8 @@ def save_phone_screen_b64(image_base64: str, *, timestamp: float | None = None, 
         "url": f"/uploads/{fname}",
         "app": app,
         "locked": bool(locked),
+        "source": source,
+        "reason": reason,
     }
     PHONE_SCREEN_META.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     cleanup_old_phone_screens()
@@ -87,10 +96,10 @@ def get_recent_phone_screen_path(max_age_seconds: int = 15) -> Path | None:
     return None
 
 
-def cleanup_old_phone_screens(max_keep: int = MAX_KEEP):
+def cleanup_old_phone_screens(max_keep: int = 1):
     files = sorted(PHONE_SCREEN_DIR.glob("phone_screen_*.jpg"))
-    if len(files) <= max_keep:
-        return
-    for f in files[:len(files) - max_keep]:
+    for f in files:
+        if f.name == LATEST_FILENAME:
+            continue
         f.unlink(missing_ok=True)
         (UPLOADS_DIR / f.name).unlink(missing_ok=True)

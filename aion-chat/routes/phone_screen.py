@@ -17,6 +17,8 @@ class PhoneScreenUpload(BaseModel):
     timestamp: float | None = None
     app: str = ""
     locked: bool = False
+    source: str = ""
+    reason: str = ""
 
 
 class PhoneScreenSkip(BaseModel):
@@ -32,6 +34,8 @@ async def upload_phone_screen(body: PhoneScreenUpload):
         timestamp=body.timestamp,
         app=body.app,
         locked=body.locked,
+        source=body.source,
+        reason=body.reason,
     )
     await manager.broadcast({"type": "phone_screen_uploaded", "data": meta})
     return {"ok": True, "screen": meta}
@@ -42,4 +46,3 @@ async def skip_phone_screen(body: PhoneScreenSkip):
     meta = record_phone_screen_skip(body.reason, app=body.app, locked=body.locked)
     await manager.broadcast({"type": "phone_screen_skipped", "data": meta})
     return {"ok": True, "screen": meta}
-

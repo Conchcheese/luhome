@@ -153,9 +153,14 @@ public class AionPushService extends Service {
     private volatile boolean screenOn = true;
     private BroadcastReceiver screenReceiver;
 
+    // ── 无障碍服务自动恢复（需 WRITE_SECURE_SETTINGS 权限，通过 ADB 授予）──
+    private volatile long lastAccessibilityRecoverAt = 0;
+    private static final long ACCESSIBILITY_RECOVER_COOLDOWN = 5_000; // 恢复操作冷却 5 秒
+
     // ── 手机屏幕截图（MediaProjection，需要用户显式授权）──
     public static final String ACTION_START_PHONE_SCREEN = "start_phone_screen_projection";
     public static final String ACTION_STOP_PHONE_SCREEN = "stop_phone_screen_projection";
+    public static final String ACTION_TEST_ACCESSIBILITY_SCREEN = "test_accessibility_screen";
     public static final String EXTRA_RESULT_CODE = "result_code";
     public static final String EXTRA_RESULT_DATA = "result_data";
     private final Object phoneScreenLock = new Object();
@@ -235,6 +240,10 @@ public class AionPushService extends Service {
             }
             if (ACTION_STOP_PHONE_SCREEN.equals(action)) {
                 stopPhoneScreenProjection();
+                return START_STICKY;
+            }
+            if (ACTION_TEST_ACCESSIBILITY_SCREEN.equals(action)) {
+                requestAccessibilityPhoneScreen("manual_test", true);
                 return START_STICKY;
             }
 
@@ -1064,11 +1073,15 @@ public class AionPushService extends Service {
     }
 
     private void schedulePhoneScreenCapture(String reason) {
+        schedulePhoneScreenSnapshot(reason, 4200, true);
+    }
+
+    private void schedulePhoneScreenSnapshot(String reason, long delayMs, boolean forceAccessibilityFallback) {
         if (System.currentTimeMillis() - lastPhoneCaptureAt < 3000) return;
         lastPhoneCaptureAt = System.currentTimeMillis();
         new Thread(() -> {
-            try { Thread.sleep(4200); } catch (InterruptedException ignored) {}
-            captureAndUploadPhoneScreen(reason);
+            try { Thread.sleep(Math.max(0, delayMs)); } catch (InterruptedException ignored) {}
+            captureAndUploadPhoneScreen(reason, forceAccessibilityFallback);
         }, "PhoneScreenCapture").start();
     }
 
@@ -1090,9 +1103,33 @@ public class AionPushService extends Service {
         return screenOn;
     }
 
-    private void captureAndUploadPhoneScreen(String reason) {
+    private boolean requestAccessibilityPhoneScreen(String reason, boolean force) {
+        boolean enabledInSettings = AionAccessibilityService.isEnabledInSettings(this);
+        String httpBase = getHttpBase();
+        boolean accepted = AionAccessibilityService.captureLatest(
+                this,
+                lastReportedApp,
+                reason,
+                force,
+                force ? 500 : 900,
+                httpBase
+        );
+        Log.i(TAG, "📱 accessibility capture request reason=" + reason
+                + " enabled=" + enabledInSettings
+                + " accepted=" + accepted
+                + " httpBase=" + httpBase
+                + " app=" + lastReportedApp);
+        if (!accepted) {
+            postPhoneScreenSkip(enabledInSettings
+                    ? "accessibility_not_connected"
+                    : "accessibility_not_enabled", false);
+        }
+        return accepted;
+    }
+
+    private void captureAndUploadPhoneScreen(String reason, boolean forceAccessibilityFallback) {
         if (!phoneScreenEnabled || phoneScreenReader == null) {
-            postPhoneScreenSkip("no_projection", false);
+            requestAccessibilityPhoneScreen("fallback_" + reason, forceAccessibilityFallback);
             return;
         }
         if (!isPhoneUnlockedForCapture()) {
@@ -1149,7 +1186,9 @@ public class AionPushService extends Service {
             uploadPhoneScreenBase64(b64, reason);
         } catch (Exception e) {
             Log.e(TAG, "📱 capture failed: " + e.getMessage());
-            postPhoneScreenSkip("capture_failed", false);
+            if (!requestAccessibilityPhoneScreen("fallback_capture_failed_" + reason, forceAccessibilityFallback)) {
+                postPhoneScreenSkip("capture_failed", false);
+            }
         } finally {
             if (image != null) try { image.close(); } catch (Exception ignored) {}
             if (bitmap != null) bitmap.recycle();
@@ -1175,6 +1214,7 @@ public class AionPushService extends Service {
             body.put("app", lastReportedApp);
             body.put("locked", false);
             body.put("reason", reason);
+            body.put("source", "mediaprojection");
             MediaType JSON_TYPE = MediaType.get("application/json; charset=utf-8");
             RequestBody reqBody = RequestBody.create(body.toString(), JSON_TYPE);
             Request req = new Request.Builder()
@@ -1190,6 +1230,10 @@ public class AionPushService extends Service {
     }
 
     private void postPhoneScreenSkip(String reason, boolean locked) {
+        new Thread(() -> postPhoneScreenSkipOnBackground(reason, locked), "PhoneScreenSkip").start();
+    }
+
+    private void postPhoneScreenSkipOnBackground(String reason, boolean locked) {
         String httpBase = getHttpBase();
         if (httpBase == null || client == null) return;
         try {
@@ -1207,7 +1251,7 @@ public class AionPushService extends Service {
                 Log.d(TAG, "📱 phone screen skipped " + reason + " → " + resp.code());
             }
         } catch (Exception e) {
-            Log.d(TAG, "📱 phone screen skip report failed: " + e.getMessage());
+            Log.d(TAG, "📱 phone screen skip report failed: " + e.getClass().getSimpleName() + ":" + e.getMessage());
         }
     }
 
@@ -1281,6 +1325,9 @@ public class AionPushService extends Service {
                 } catch (Exception e) {
                     Log.e(TAG, "📱 activity error: " + e.getMessage());
                 }
+
+                // 每轮检测无障碍服务，被系统关闭时自动恢复
+                checkAndRecoverAccessibility();
 
                 try { Thread.sleep(ACTIVITY_INTERVAL); }
                 catch (InterruptedException e) { break; }
@@ -1388,6 +1435,68 @@ public class AionPushService extends Service {
     }
 
     // ══════════════════════════════════════════════════════════
+    //  无障碍服务自动恢复 — 被 ROM 安全策略关闭后自动重新开启
+    //  需要 WRITE_SECURE_SETTINGS 权限（通过 ADB 一次性授予）：
+    //  adb shell pm grant com.aion.chat android.permission.WRITE_SECURE_SETTINGS
+    // ══════════════════════════════════════════════════════════
+
+    private void checkAndRecoverAccessibility() {
+        // 检查无障碍服务实例是否存活
+        if (AionAccessibilityService.isReady()) return;
+
+        // 冷却期内不重复操作
+        long now = System.currentTimeMillis();
+        if (now - lastAccessibilityRecoverAt < ACCESSIBILITY_RECOVER_COOLDOWN) return;
+        lastAccessibilityRecoverAt = now;
+
+        // 检查是否有 WRITE_SECURE_SETTINGS 权限
+        boolean hasPermission = (checkCallingOrSelfPermission(
+                "android.permission.WRITE_SECURE_SETTINGS") == PackageManager.PERMISSION_GRANTED);
+        if (!hasPermission) {
+            Log.d(TAG, "♻️ No WRITE_SECURE_SETTINGS, cannot auto-recover accessibility");
+            return;
+        }
+
+        try {
+            String targetComponent = new android.content.ComponentName(
+                    this, AionAccessibilityService.class).flattenToString();
+
+            // 读取当前已启用的无障碍服务列表
+            String current = Settings.Secure.getString(
+                    getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+
+            // 如果列表中已经没有我们的服务，重新写入
+            if (current == null || !current.contains(targetComponent)) {
+                String newValue = (current == null || current.isEmpty())
+                        ? targetComponent
+                        : current + ":" + targetComponent;
+                Settings.Secure.putString(getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, newValue);
+                Settings.Secure.putString(getContentResolver(),
+                        "accessibility_enabled", "1");
+                Log.i(TAG, "♻️ Accessibility service re-enabled by WRITE_SECURE_SETTINGS");
+            } else {
+                // 设置里有但实例没启动，尝试先移除再添加来触发系统重新绑定
+                String without = current.replace(targetComponent, "")
+                        .replace("::", ":").replaceAll("^:|:$", "");
+                Settings.Secure.putString(getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, without);
+                try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+                String restored = without.isEmpty()
+                        ? targetComponent
+                        : without + ":" + targetComponent;
+                Settings.Secure.putString(getContentResolver(),
+                        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, restored);
+                Log.i(TAG, "♻️ Accessibility service toggled to force rebind");
+            }
+        } catch (SecurityException e) {
+            Log.w(TAG, "♻️ WRITE_SECURE_SETTINGS permission revoked: " + e.getMessage());
+        } catch (Exception e) {
+            Log.e(TAG, "♻️ accessibility recover failed: " + e.getMessage());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
     //  屏幕开关监听 — 锁屏/亮屏时立即上报
     // ══════════════════════════════════════════════════════════
 
@@ -1403,13 +1512,18 @@ public class AionPushService extends Service {
                         screenOn = false;
                         lastReportedApp = "__screen_off__";
                         // 在后台线程发送，避免阻塞广播
-                        new Thread(() -> postActivityToServer("screen_off"), "ScreenOff").start();
+                        new Thread(() -> {
+                            postActivityToServer("screen_off");
+                            postPhoneScreenSkip("screen_off", true);
+                        }, "ScreenOff").start();
                         break;
                     case Intent.ACTION_SCREEN_ON:
                         Log.i(TAG, "📱 Screen ON");
                         screenOn = true;
                         lastReportedApp = "__screen_on__";
-                        new Thread(() -> postActivityToServer("screen_on"), "ScreenOn").start();
+                        new Thread(() -> {
+                            postActivityToServer("screen_on");
+                        }, "ScreenOn").start();
                         break;
                 }
             }
