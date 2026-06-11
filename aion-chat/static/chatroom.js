@@ -44,7 +44,7 @@ const crHandledToyEvents = new Set();
 
 const AVATARS = {
   user: '/public/UserIcon.png',
-  aion: '/public/gropicon1.png',
+  aion: '/public/AIIcon.png',
   connor: '/public/codexicon.png',
 };
 

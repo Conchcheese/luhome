@@ -11,7 +11,10 @@ import io, wave, time, threading, asyncio, re
 import numpy as np
 import sounddevice as sd
 import httpx
-import webrtcvad
+try:
+    import webrtcvad
+except ImportError:
+    webrtcvad = None
 
 _EMOJI_RE = re.compile(
     "[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF"
@@ -51,7 +54,7 @@ class VoiceWakeup:
         self.in_call = False
         self.ai_speaking = False
 
-        self._vad = webrtcvad.Vad(VAD_MODE)
+        self._vad = webrtcvad.Vad(VAD_MODE) if webrtcvad else None
         self._loop: asyncio.AbstractEventLoop = None
         self._ws_manager = None
         self._stop_evt = threading.Event()

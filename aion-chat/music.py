@@ -5,9 +5,14 @@
 """
 
 import logging, threading, time
-from pyncm.apis.login import LoginViaAnonymousAccount, LoginViaCookie
-from pyncm.apis.cloudsearch import GetSearchResult
-from pyncm.apis.track import GetTrackDetail, GetTrackAudio
+
+try:
+    from pyncm.apis.login import LoginViaAnonymousAccount, LoginViaCookie
+    from pyncm.apis.cloudsearch import GetSearchResult
+    from pyncm.apis.track import GetTrackDetail, GetTrackAudio
+    _PYNCM_AVAILABLE = True
+except ImportError:
+    _PYNCM_AVAILABLE = False
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +24,8 @@ _SESSION_TTL = 2 * 3600  # 会话有效期：2小时
 
 def _ensure_login():
     """确保已登录且会话未过期（优先 MUSIC_U Cookie，否则匿名）"""
+    if not _PYNCM_AVAILABLE:
+        return
     global _inited, _last_login_time
     now = time.time()
     if _inited and (now - _last_login_time < _SESSION_TTL):
@@ -61,6 +68,8 @@ def reload_login():
 
 def search_songs(keyword: str, limit: int = 5) -> list[dict]:
     """搜索歌曲，返回精简结果列表"""
+    if not _PYNCM_AVAILABLE:
+        return []
     _ensure_login()
     resp = GetSearchResult(keyword, limit=limit)
     songs = resp.get("result", {}).get("songs", [])
@@ -103,6 +112,8 @@ def get_song_detail(song_id: int) -> dict | None:
 
 def get_audio_url(song_id: int) -> str | None:
     """尝试获取播放 URL，失败时自动重新登录重试一次"""
+    if not _PYNCM_AVAILABLE:
+        return None
     _ensure_login()
     resp = GetTrackAudio([song_id])
     for d in resp.get("data", []):

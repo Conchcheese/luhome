@@ -89,36 +89,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 async def get_embedding(text: str) -> list[float] | None:
-    ecfg = get_embedding_config()
-    if not ecfg["api_key"]:
-        return None
-    if ecfg["use_openai"]:
-        # OpenAI 兼容格式（硅基流动等）
-        url = f"{ecfg['base_url']}/v1/embeddings"
-        headers = {"Authorization": f"Bearer {ecfg['api_key']}", "Content-Type": "application/json"}
-        body = {"model": ecfg["model"], "input": text}
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(url, json=body, headers=headers)
-                if resp.status_code != 200:
-                    print(f"[Embedding] OpenAI 兼容调用失败 {resp.status_code}: {resp.text[:300]}")
-                    return None
-                return resp.json()["data"][0]["embedding"]
-        except Exception as e:
-            print(f"[Embedding] 调用异常: {e}")
-            return None
-    else:
-        # Gemini 原生格式
-        model = ecfg["model"]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent?key={ecfg['api_key']}"
-        body = {"content": {"parts": [{"text": text}]}}
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(url, json=body)
-                resp.raise_for_status()
-                return resp.json()["embedding"]["values"]
-        except Exception:
-            return None
+    # 向量 embedding 暂时禁用，记忆召回改用关键词匹配
+    return None
 
 
 # ── 关键词匹配辅助 ──────────────────────
@@ -146,10 +118,50 @@ async def recall_memories(query_text: str, query_keywords: list[str] = None,
     返回 (matched, debug_top6): matched 为达标结果, debug_top6 为得分最高的前6条（含未达标）
     """
     query_vec = await get_embedding(query_text)
-    if not query_vec:
-        return [], []
     if query_keywords is None:
         query_keywords = []
+
+    # 文字关键词模式（无向量时）：用关键词+内容匹配代替余弦相似度
+    if not query_vec:
+        async with get_db() as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT id, content, type, created_at, source_conv, keywords, importance, "
+                "source_start_ts, source_end_ts, source_msg_id "
+                "FROM memories"
+            )
+            rows = await cur.fetchall()
+        kw_threshold = 0.25
+        all_scored = []
+        for row in rows:
+            kw_score = _keyword_match_score(query_keywords, row["keywords"]) if query_keywords else 0.0
+            # 内容文本匹配：查询词直接命中记忆正文
+            content_lower = (row["content"] or "").lower()
+            content_hit = sum(
+                1 for qk in query_keywords if qk.lower() in content_lower
+            ) / max(len(query_keywords), 1) if query_keywords else 0.0
+            importance = float(row["importance"] or 0.5)
+            final_score = max(kw_score, content_hit) * 0.75 + importance * 0.25
+            item = {
+                "id": row["id"], "content": row["content"], "type": row["type"],
+                "created_at": row["created_at"],
+                "score": round(final_score, 4),
+                "vec_sim": 0.0,
+                "kw_score": round(kw_score, 4),
+                "importance": round(importance, 2),
+                "keywords": row["keywords"] or "",
+                "source_start_ts": row["source_start_ts"],
+                "source_end_ts": row["source_end_ts"],
+                "source_conv": row["source_conv"],
+                "source_msg_id": row["source_msg_id"],
+            }
+            all_scored.append(item)
+        all_scored.sort(key=lambda x: x["score"], reverse=True)
+        debug_top6 = all_scored[:6]
+        matched = [r for r in all_scored if r["score"] >= kw_threshold][:top_k]
+        return matched, debug_top6
+
+    # 向量模式（有 embedding 时）
     async with get_db() as db:
         db.row_factory = aiosqlite.Row
         cur = await db.execute(

@@ -1753,6 +1753,180 @@ body[data-theme="light"] .plus-menu-item { text-shadow: none; }
   font-size: 14px;
 }
 
+/* ═══════════════════════════════════════════
+   Dark mode — deep space theme
+   ═══════════════════════════════════════════ */
+
+/* Stars canvas */
+.stars-canvas {
+  display: none;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+body[data-theme="dark"] .stars-canvas { display: block; }
+
+/* CSS variables override */
+body[data-theme="dark"] {
+  --bg: #060b1a;
+  --surface: rgba(8,16,38,0.88);
+  --surface2: rgba(0,30,80,0.32);
+  --border: rgba(0,100,200,0.18);
+  --text: rgba(210,235,255,0.92);
+  --text2: rgba(140,190,240,0.70);
+  --text3: rgba(90,150,210,0.52);
+  --accent: #4dabf7;
+  --user-bg: rgba(60,120,255,0.18);
+  --ai-bg: rgba(0,160,200,0.12);
+  --danger: #f44336;
+  background: #060b1a;
+}
+
+/* App root */
+body[data-theme="dark"] .app {
+  background: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+/* Glow halos — on .app itself so they're inside its stacking context */
+body[data-theme="dark"] .app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 18% 12%, rgba(20,60,180,0.16) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 35% at 82% 22%, rgba(0,100,200,0.12) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 50% at 50% 85%, rgba(10,40,120,0.10) 0%, transparent 70%);
+}
+
+/* All major content panels sit above canvas (z-index:0) */
+body[data-theme="dark"] .sidebar,
+body[data-theme="dark"] .chat-area { position: relative; z-index: 1; }
+
+/* Chat area and messages MUST be transparent to show stars */
+body[data-theme="dark"] .chat-area,
+body[data-theme="dark"] .messages { background: transparent !important; }
+
+/* Sidebar */
+body[data-theme="dark"] .sidebar {
+  background: rgba(6,11,26,0.88);
+  border-right-color: rgba(0,100,200,0.16);
+}
+body[data-theme="dark"] .sidebar-header button { background: rgba(0,110,255,0.22); }
+body[data-theme="dark"] .sidebar-header .settings-btn { background: rgba(0,40,100,0.32); }
+body[data-theme="dark"] .conv-item:hover,
+body[data-theme="dark"] .conv-item.active { background: rgba(0,80,200,0.16); }
+body[data-theme="dark"] .conv-item.active { border-left-color: #4dabf7; }
+body[data-theme="dark"] .sidebar-footer button { background: rgba(0,40,100,0.28); }
+body[data-theme="dark"] .sidebar-footer button:hover { background: rgba(0,70,180,0.30); }
+
+/* Chat header */
+body[data-theme="dark"] .chat-header {
+  background: rgba(6,11,26,0.80);
+  border-bottom-color: rgba(0,100,200,0.16);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+}
+body[data-theme="dark"] .config-btn {
+  background: rgba(0,40,100,0.32);
+  border-color: rgba(0,100,200,0.22);
+}
+body[data-theme="dark"] .config-popup {
+  background: rgba(8,16,40,0.95);
+  border-color: rgba(0,100,200,0.22);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+/* Messages */
+body[data-theme="dark"] .messages { background: transparent; }
+body[data-theme="dark"] .msg-row.user .msg-bubble {
+  background: rgba(50,100,220,0.22);
+  border-color: rgba(80,140,255,0.22);
+  color: rgba(210,235,255,0.92);
+  box-shadow: inset 0 1px 4px rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.25);
+}
+body[data-theme="dark"] .msg-row.assistant .msg-bubble {
+  background: rgba(0,60,100,0.28);
+  border-color: rgba(0,120,200,0.22);
+  color: rgba(210,235,255,0.92);
+  box-shadow: inset 0 1px 4px rgba(255,255,255,0.06), 0 1px 3px rgba(0,0,0,0.25);
+}
+body[data-theme="dark"] .msg-row.user .msg-role-name { color: #4dabf7; }
+body[data-theme="dark"] .msg-row.assistant .msg-role-name { color: rgba(100,215,180,0.85); }
+body[data-theme="dark"] .msg-row.system .system-notice {
+  background: rgba(0,40,100,0.28);
+  border-color: rgba(0,100,200,0.18);
+}
+
+/* Input area */
+body[data-theme="dark"] .input-area {
+  background: rgba(6,11,26,0.88);
+  border-top-color: rgba(0,100,200,0.16);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+body[data-theme="dark"] .input-row textarea {
+  background: rgba(0,40,100,0.22);
+  border-color: rgba(0,100,200,0.22);
+  color: rgba(210,235,255,0.92);
+}
+body[data-theme="dark"] .input-row textarea::placeholder { color: rgba(90,150,210,0.50); }
+body[data-theme="dark"] .input-row textarea:focus { border-color: #4dabf7; }
+body[data-theme="dark"] .upload-btn {
+  background: rgba(0,40,100,0.28);
+  border-color: rgba(0,100,200,0.22);
+  color: rgba(140,190,240,0.72);
+}
+body[data-theme="dark"] .plus-menu {
+  background: rgba(8,16,40,0.96);
+  border-color: rgba(0,100,200,0.22);
+}
+body[data-theme="dark"] .plus-menu-item:hover { background: rgba(0,60,160,0.28); }
+body[data-theme="dark"] .send-btn { background: #2d6fd4; }
+body[data-theme="dark"] .send-btn:hover { background: #4dabf7; }
+body[data-theme="dark"] .bottom-fade-overlay {
+  background: linear-gradient(to bottom, transparent, #060b1a);
+}
+
+/* Scrollbar */
+body[data-theme="dark"] ::-webkit-scrollbar-thumb { background-color: rgba(80,140,220,0.25); }
+body[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background-color: rgba(80,140,220,0.45); }
+
+/* Modal */
+body[data-theme="dark"] .modal {
+  background: rgba(8,16,40,0.97);
+  border-color: rgba(0,100,200,0.22);
+}
+body[data-theme="dark"] .modal-overlay { background: rgba(0,0,0,0.72); }
+
+/* ── 螃蟹行（输入框上方） ── */
+.chat-crab-row {
+  position: relative;
+  flex-shrink: 0;
+  height: 72px;
+  display: none;
+}
+body[data-theme="dark"] .chat-crab-row { display: block; }
+.chat-crab-row::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(217,119,87,0.40);
+  pointer-events: none;
+}
+.chat-pixel-crab {
+  position: absolute;
+  right: 18%;
+  bottom: 2px;
+  image-rendering: pixelated;
+}
+
 /* ── 转账卡片（消息内嵌，微信风格） ── */
 .transfer-card {
   display: flex;

@@ -42,7 +42,7 @@ def load_settings():
     if SETTINGS_PATH.exists():
         with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
-    keys = {"gemini_key": "", "siliconflow_key": "", "gemini_free_key": "", "aipro_key": ""}
+    keys = {"gemini_key": "", "siliconflow_key": "", "gemini_free_key": "", "aipro_key": "", "claude_key": ""}
     txt = BASE_DIR.parent / "所需要的API.txt"
     if txt.exists():
         with open(txt, "r", encoding="utf-8") as f:
@@ -67,6 +67,8 @@ def get_key(provider: str) -> str:
         return SETTINGS.get("gemini_free_key", "") or SETTINGS.get("gemini_key", "")
     if provider == "aipro":
         return SETTINGS.get("aipro_key", "")
+    if provider == "claude":
+        return SETTINGS.get("claude_key", "")
     return SETTINGS.get("siliconflow_key", "")
 
 def get_sentinel_config() -> dict:
@@ -195,6 +197,7 @@ def sanitize_filename(name):
 
 # ── 模型配置 ─────────────────────────────────────
 MODELS = {
+    "Claude-Sonnet":     {"provider": "claude", "model": "claude-sonnet-4-6", "vision": True},
     "硅基GLM-5.1":      {"provider": "siliconflow", "model": "Pro/zai-org/GLM-5.1", "vision": False},
     "硅基GLM-5.0":      {"provider": "siliconflow", "model": "Pro/zai-org/GLM-5", "vision": False},
     "Kimi-K2.6":      {"provider": "siliconflow", "model": "Pro/moonshotai/Kimi-K2.6", "vision": True},
@@ -212,7 +215,7 @@ MODELS = {
     "AGY-Claude-Opus-4.6": {"provider": "antigravity_cli", "model": "Claude Opus 4.6 (Thinking)", "vision": True},
 }
 
-DEFAULT_MODEL = "Gemini-3.5-flash"
+DEFAULT_MODEL = "Claude-Sonnet"
 
 # ── 摄像头默认配置 ───────────────────────────────
 DEFAULT_CAM_CFG = {

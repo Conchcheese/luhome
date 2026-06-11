@@ -1,17 +1,19 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>Aion Chat</title>
+<title>Lumen Chat</title>
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/public/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#ff8359">
-<link rel="stylesheet" href="/static/chat.css?v=theme-20260606b">
+<link rel="stylesheet" href="/static/chat.css?v=deepspace-20260611b">
 </head>
 <body data-theme="dark">
+
+<canvas id="chatStarsCanvas" class="stars-canvas"></canvas>
 
 <div class="app">
   <aside class="sidebar" id="sidebar">
@@ -22,12 +24,12 @@
     </div>
     <div class="conv-list" id="convList"></div>
     <div class="sidebar-footer">
-      <button id="sysLogBtn" onclick="openSystemLog()">📋 系统日志</button>
-      <button onclick="openWhisper()">💗 密语时刻</button>
-      <button onclick="openStarredPanel()">⭐ 星标消息</button>
-      <button onclick="openWalletPanel()">💰 钱包</button>
-      <button onclick="openSubPage('/diary')">📔 日记本</button>
-      <button onclick="openSubPage('/')">🏠 返回主页</button>
+      <button id="sysLogBtn" onclick="openSystemLog()">系统日志</button>
+      <button onclick="openWhisper()">密语时刻</button>
+      <button onclick="openStarredPanel()">星标消息</button>
+      <button onclick="openWalletPanel()">钱包</button>
+      <button onclick="openSubPage('/diary')">日记本</button>
+      <button onclick="openSubPage('/')">返回主页</button>
     </div>
   </aside>
   <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
@@ -244,6 +246,27 @@
       <button onclick="voiceHangup()" id="voiceHangupBtn" style="display:none;margin-left:auto;background:none;border:1px solid currentColor;color:inherit;border-radius:12px;padding:2px 10px;font-size:11px;cursor:pointer">挂断</button>
     </div>
     <div class="messages" id="messages"></div>
+    <div class="chat-crab-row">
+      <svg class="chat-pixel-crab" viewBox="0 0 120 70" width="108" height="63" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="0"  width="80" height="10" fill="#D97757"/>
+        <rect x="0"  y="10" width="120" height="10" fill="#D97757"/>
+        <rect x="0"  y="20" width="40"  height="10" fill="#D97757"/>
+        <rect x="40" y="20" width="10"  height="10" fill="#1E1008"/>
+        <rect x="50" y="20" width="20"  height="10" fill="#D97757"/>
+        <rect x="70" y="20" width="10"  height="10" fill="#1E1008"/>
+        <rect x="80" y="20" width="40"  height="10" fill="#D97757"/>
+        <rect x="20" y="30" width="20"  height="10" fill="#D97757"/>
+        <rect x="40" y="30" width="10"  height="10" fill="#1E1008"/>
+        <rect x="50" y="30" width="20"  height="10" fill="#D97757"/>
+        <rect x="70" y="30" width="10"  height="10" fill="#1E1008"/>
+        <rect x="80" y="30" width="20"  height="10" fill="#D97757"/>
+        <rect x="20" y="40" width="80" height="10" fill="#D97757"/>
+        <rect x="20" y="50" width="10" height="13" fill="#D97757"/>
+        <rect x="40" y="50" width="10" height="13" fill="#D97757"/>
+        <rect x="70" y="50" width="10" height="13" fill="#D97757"/>
+        <rect x="90" y="50" width="10" height="13" fill="#D97757"/>
+      </svg>
+    </div>
     <div class="input-area">
       <div class="preview-area" id="previewArea"></div>
       <div class="input-row" id="inputRow">
@@ -277,7 +300,7 @@
 
   <iframe id="subPageFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
 </div>
-<script src="/static/chat.js?v=system-order-20260608d"></script>
+<script src="/static/chat.js?v=system-order-20260611e"></script>
 
 <!-- ── 转账弹窗 ── -->
 <div class="transfer-dialog-overlay" id="transferDialogOverlay" onclick="closeTransferDialog()">
@@ -308,6 +331,40 @@
   </div>
 </div>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+<script>
+(function(){
+  function drawChatStars(){
+    const canvas = document.getElementById('chatStarsCanvas');
+    if(!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if(document.body.dataset.theme !== 'dark'){ ctx.clearRect(0,0,canvas.width,canvas.height); return; }
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const W = canvas.width, H = canvas.height;
+    for(let i=0;i<750;i++){
+      const x=Math.random()*W, y=Math.random()*H*0.85;
+      const big=Math.random()<0.20;
+      const r=big?Math.random()*1.2+1.0:Math.random()*0.7+0.2;
+      const a=big?Math.random()*0.38+0.28:Math.random()*0.44+0.18;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(215,235,255,${a})`; ctx.fill();
+    }
+    for(let i=0;i<75;i++){
+      const x=Math.random()*W, y=Math.random()*H*0.60;
+      const r=Math.random()*0.8+0.55, a=Math.random()*0.37+0.35;
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(225,242,255,${a})`; ctx.fill();
+      const grd=ctx.createRadialGradient(x,y,0,x,y,r*5);
+      grd.addColorStop(0,`rgba(170,220,255,${a*0.42})`);
+      grd.addColorStop(1,'transparent');
+      ctx.beginPath(); ctx.arc(x,y,r*5,0,Math.PI*2); ctx.fillStyle=grd; ctx.fill();
+    }
+  }
+  drawChatStars();
+  window.addEventListener('resize', drawChatStars);
+  new MutationObserver(drawChatStars).observe(document.body,{attributes:true,attributeFilter:['data-theme']});
+})();
+</script>
 <script src="/static/video-call.js"></script>
 </body>
 </html>

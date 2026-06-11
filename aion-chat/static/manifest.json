@@ -1,7 +1,7 @@
 {
-  "name": "Aion Chat",
-  "short_name": "Aion",
-  "description": "Aion AI 聊天助手",
+  "name": "Lumen Chat",
+  "short_name": "Lumen",
+  "description": "Lumen AI 聊天助手",
   "start_url": "/chat",
   "scope": "/",
   "display": "standalone",

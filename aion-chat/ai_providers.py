@@ -10,6 +10,9 @@ import tempfile
 
 from config import get_key, MODELS, UPLOADS_DIR, CODEX_UPLOADS_DIR, SETTINGS, get_sentinel_config
 
+CLAUDE_API_BASE = "https://api.ofox.ai/anthropic"
+CLAUDE_API_VERSION = "2023-06-01"
+
 # CLI 状态前缀：yield 此前缀的 chunk 会被 _bg_generate 拦截为状态事件，不送入 TTS 和正文
 CLI_STATUS_PREFIX = "\x00CLI_STATUS:"
 _ANTIGRAVITY_DEFAULT_PRINT_TIMEOUT = "10m"
@@ -401,6 +404,140 @@ async def call_aipro(messages: list, model: str, meta: dict | None = None, tempe
                             yield delta["content"]
                     except:
                         pass
+
+# ── Claude (Ofox 中转) ────────────────────────────
+def _build_claude_messages(messages: list) -> tuple[str, list]:
+    """将消息列表拆分为 system 字符串 + Anthropic messages 数组。
+    - system 消息提取到顶层
+    - 合并连续同角色消息（Anthropic 要求严格交替）
+    - 支持图片附件（Anthropic vision 格式）
+    """
+    system_parts = []
+    raw = []
+    for m in messages:
+        role = m.get("role", "user")
+        content = m.get("content", "") or ""
+        if role == "system":
+            system_parts.append(content)
+            continue
+        role = "assistant" if role in ("assistant", "model", "cam_log") else "user"
+
+        attachments = m.get("attachments", [])
+        if isinstance(attachments, str):
+            try:
+                attachments = json.loads(attachments) if attachments else []
+            except Exception:
+                attachments = []
+
+        if attachments and role == "user":
+            parts = []
+            if content:
+                parts.append({"type": "text", "text": content})
+            for att in attachments:
+                if isinstance(att, dict):
+                    continue
+                fpath = _resolve_attachment_path(att)
+                if fpath.exists():
+                    mime = mimetypes.guess_type(str(fpath))[0] or "image/jpeg"
+                    if mime.startswith("image/"):
+                        b64 = base64.b64encode(fpath.read_bytes()).decode()
+                        parts.append({
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": mime, "data": b64},
+                        })
+            raw.append({"role": role, "content": parts if parts else content})
+        else:
+            raw.append({"role": role, "content": content})
+
+    # 合并连续同角色（Anthropic 不允许连续同角色）
+    merged = []
+    for item in raw:
+        if merged and merged[-1]["role"] == item["role"]:
+            prev = merged[-1]
+            if isinstance(prev["content"], str) and isinstance(item["content"], str):
+                prev["content"] = prev["content"] + "\n\n" + item["content"]
+            elif isinstance(prev["content"], list) and isinstance(item["content"], list):
+                prev["content"].extend(item["content"])
+            elif isinstance(prev["content"], str) and isinstance(item["content"], list):
+                prev["content"] = [{"type": "text", "text": prev["content"]}] + item["content"]
+            else:
+                prev["content"] = item["content"]
+        else:
+            merged.append(dict(item))
+
+    # Anthropic 要求首条消息必须是 user
+    if merged and merged[0]["role"] != "user":
+        merged.insert(0, {"role": "user", "content": "."})
+
+    return "\n\n".join(system_parts), merged
+
+
+async def call_claude(messages: list, model: str, meta: dict | None = None,
+                      temperature: float | None = None, max_tokens: int | None = None):
+    """通过 Ofox 中转调用 Claude API（Anthropic 原生流式格式）"""
+    api_key = get_key("claude")
+    if not api_key:
+        yield "[Claude错误] 未配置 claude_key，请在设置中填写 API Key"
+        return
+
+    system_text, anthro_messages = _build_claude_messages(messages)
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens or 8192,
+        "stream": True,
+        "messages": anthro_messages,
+    }
+    if system_text:
+        payload["system"] = system_text
+    if temperature is not None:
+        payload["temperature"] = temperature
+
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": CLAUDE_API_VERSION,
+        "Content-Type": "application/json",
+    }
+    url = f"{CLAUDE_API_BASE}/v1/messages"
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                try:
+                    err = json.loads(body).get("error", {}).get("message", body.decode())
+                except Exception:
+                    err = body.decode(errors="replace")[:500]
+                yield f"[Claude错误 {resp.status_code}] {err}"
+                return
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    event = json.loads(data)
+                except Exception:
+                    continue
+                etype = event.get("type", "")
+                if etype == "content_block_delta":
+                    delta = event.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        text = delta.get("text", "")
+                        if text:
+                            yield text
+                elif etype == "message_delta" and meta is not None:
+                    usage = event.get("usage", {})
+                    if usage:
+                        meta["completion_tokens"] = usage.get("output_tokens", 0)
+                elif etype == "message_start" and meta is not None:
+                    usage = event.get("message", {}).get("usage", {})
+                    if usage:
+                        meta["prompt_tokens"] = usage.get("input_tokens", 0)
+                        meta["total_tokens"] = (
+                            usage.get("input_tokens", 0) + meta.get("completion_tokens", 0)
+                        )
+
 
 # ── Gemini CLI ────────────────────────────────────
 def _find_gemini_script() -> str | None:
@@ -1268,7 +1405,12 @@ async def stream_ai(messages: list, model_key: str, meta: dict | None = None, te
     if not cfg.get("vision", True) and _messages_have_images(normalized):
         yield f"{CLI_STATUS_PREFIX}哨兵模型正在识别图片内容..."
         normalized = await _sentinel_describe_images(normalized)
-    if cfg["provider"] == "siliconflow":
+    if cfg["provider"] == "claude":
+        async for chunk in call_claude(normalized, cfg["model"], meta, temperature, max_tokens):
+            if cancel_event and cancel_event.is_set():
+                return
+            yield chunk
+    elif cfg["provider"] == "siliconflow":
         async for chunk in call_siliconflow(normalized, cfg["model"], meta, temperature, max_tokens):
             if cancel_event and cancel_event.is_set():
                 return

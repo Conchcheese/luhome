@@ -17,11 +17,10 @@ IMAGE_GEN_TIMEOUT = 120  # 生图超时秒数
 
 
 async def generate_image(prompt: str, is_selfie: bool = False) -> str | None:
-    """
-    调用 Gemini 生图模型生成图片，保存到 uploads 目录，返回文件名。
-    is_selfie=True 时自动附带参考图（生图锚点.jpg）。
-    失败返回 None。
-    """
+    """生图功能暂时禁用。"""
+    print("[image_gen] 生图功能已暂时禁用")
+    return None
+
     api_key = get_key("gemini")
     if not api_key:
         print("[image_gen] 没有 Gemini API Key，无法生图")

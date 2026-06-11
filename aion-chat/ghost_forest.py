@@ -99,7 +99,7 @@ def _session_path(sid: str) -> Path:
     return GHOST_FOREST_DIR / f"{sid}.json"
 
 
-def create_session(title: str = "", model: str = "gemini-2.5-flash",
+def create_session(title: str = "", model: str = "Claude-Sonnet",
                    dm_persona_id: str = "", player_persona_id: str = "") -> dict:
     """创建新游戏会话"""
     session = {
@@ -223,7 +223,7 @@ def _consume_item(session, name: str, count: int):
 # ── AI 历史压缩 ──────────────────────────────────
 COMPRESS_THRESHOLD = 16   # ai_history 消息数超过此值触发压缩 (8轮 = 16条)
 KEEP_RECENT = 6           # 保留最近 3 轮 (6条消息) 不压缩
-COMPRESS_MODEL = "gemini-3.1-flash-lite"
+COMPRESS_MODEL = "Claude-Sonnet"
 
 COMPRESS_PROMPT = """你是一位剧情档案整理员。请将以下TRPG游戏的历史对话记录压缩为一份精炼的前情摘要。
 
