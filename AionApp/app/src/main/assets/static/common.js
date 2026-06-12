@@ -1,19 +1,19 @@
-/* ── Aion Common JS — 共享工具函数 ── */
+/* ── Lumen Common JS — 共享工具函数 ── */
 
 const $ = id => document.getElementById(id);
 
 // Android APK 中 WebView 是 edge-to-edge，普通功能页需要自己避开系统状态栏。
 // iframe 子页面由 chat.html 的浮层统一处理，避免重复留白。
-if (navigator.userAgent.includes('AionChatApp')) {
+if (navigator.userAgent.includes('LumenChatApp')) {
   const root = document.documentElement;
-  root.classList.add('aion-app');
-  if (window.parent !== window) root.classList.add('aion-iframe');
+  root.classList.add('lumen-app');
+  if (window.parent !== window) root.classList.add('lumen-iframe');
   document.addEventListener('DOMContentLoaded', () => {
     if (window.parent === window) {
       const topBar = document.querySelector('.top-bar');
       const color = getSolidVisualColor(topBar ? getComputedStyle(topBar).backgroundColor : '', getPageBaseColor());
-      root.style.setProperty('--aion-safe-bg', color);
-      if (window.AionStatusBar) window.AionStatusBar.setBarStyle(isLightVisualColor(color) ? 'light' : 'dark');
+      root.style.setProperty('--lumen-safe-bg', color);
+      if (window.LumenStatusBar) window.LumenStatusBar.setBarStyle(isLightVisualColor(color) ? 'light' : 'dark');
     }
   });
 }
@@ -119,7 +119,7 @@ function connectCommonWS(extraHandler) {
     }
     // 监控提示音 — 全局
     if (msg.type === "monitor_alert") {
-      const audio = new Audio('/public/AionMonitoralart.mp3');
+      const audio = new Audio('/public/LumenMonitoralart.mp3');
       audio.play().catch(() => {});
       sendSystemNotification('📷 监控提醒', msg.data?.content || '哨兵监控即将分析');
       return;
@@ -251,7 +251,7 @@ function _buildGiftOverlay(gift) {
           <img class="gift-image" src="/uploads/${gift.image_path}" alt="礼物" />
         </div>
         <div class="gift-message-wrap" id="giftMessageWrap" style="display:none">
-          <p class="gift-message-from" style="text-align:center;opacity:0.7;font-size:0.85em;margin-bottom:4px">—— from ${gift.sender === 'connor' ? 'Connor' : 'Aion'} ——</p>
+          <p class="gift-message-from" style="text-align:center;opacity:0.7;font-size:0.85em;margin-bottom:4px">—— from ${gift.sender === 'connor' ? 'Connor' : 'Lumen'} ——</p>
           <p class="gift-message-text">${escHtml(gift.message)}</p>
         </div>
         <button class="gift-receive-btn" id="giftReceiveBtn" style="display:none" onclick="_receiveGift('${gift.id}')">

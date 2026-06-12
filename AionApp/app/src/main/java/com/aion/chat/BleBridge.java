@@ -1,4 +1,4 @@
-package com.aion.chat;
+package com.lumen.chat;
 
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
@@ -29,13 +29,13 @@ import java.util.concurrent.TimeUnit;
  * 原生 BLE 桥接 — 绕过 WebView 不支持 Web Bluetooth API 的限制
  * 扫描并连接 SOSEXY 设备，实现与 chat.html 中 toySendData2 相同的封包协议
  *
- * 前端调用: window.AionBle.connect() / disconnect() / isConnected() / sendData(hex)
+ * 前端调用: window.LumenBle.connect() / disconnect() / isConnected() / sendData(hex)
  * 前端回调: toyNativeBle.onConnected() / onDisconnected() / onError(msg) / onLog(msg)
  */
 @SuppressLint("MissingPermission")
 public class BleBridge {
 
-    private static final String TAG = "AionBle";
+    private static final String TAG = "LumenBle";
     private static final UUID SERVICE_UUID = UUID.fromString("0000ee01-0000-1000-8000-00805f9b34fb");
     private static final UUID WRITE_UUID   = UUID.fromString("0000ee03-0000-1000-8000-00805f9b34fb");
     private static final UUID NOTIFY_UUID  = UUID.fromString("0000ee02-0000-1000-8000-00805f9b34fb");

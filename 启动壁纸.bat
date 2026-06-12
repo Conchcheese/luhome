@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-title Aion Wallpaper
+title Lumen Wallpaper
 
 echo ========================================
-echo   Aion 动态壁纸 正在启动...
+echo   Lumen 动态壁纸 正在启动...
 echo   关闭此窗口即关闭壁纸
 echo ========================================
 

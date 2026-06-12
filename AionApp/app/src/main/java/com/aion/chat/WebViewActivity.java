@@ -1,4 +1,4 @@
-﻿package com.aion.chat;
+﻿package com.lumen.chat;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -84,16 +84,16 @@ public class WebViewActivity extends AppCompatActivity {
     private final ActivityResultLauncher<Intent> phoneScreenLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                    Intent serviceIntent = new Intent(this, AionPushService.class);
-                    serviceIntent.putExtra("action", AionPushService.ACTION_START_PHONE_SCREEN);
-                    serviceIntent.putExtra(AionPushService.EXTRA_RESULT_CODE, result.getResultCode());
-                    serviceIntent.putExtra(AionPushService.EXTRA_RESULT_DATA, result.getData());
+                    Intent serviceIntent = new Intent(this, LumenPushService.class);
+                    serviceIntent.putExtra("action", LumenPushService.ACTION_START_PHONE_SCREEN);
+                    serviceIntent.putExtra(LumenPushService.EXTRA_RESULT_CODE, result.getResultCode());
+                    serviceIntent.putExtra(LumenPushService.EXTRA_RESULT_DATA, result.getData());
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(serviceIntent);
                     } else {
                         startService(serviceIntent);
                     }
-                    getSharedPreferences("aion_prefs", MODE_PRIVATE)
+                    getSharedPreferences("lumen_prefs", MODE_PRIVATE)
                             .edit().putBoolean("phone_screen_supervision", true).apply();
                     Toast.makeText(this, "手机屏幕监督已开启", Toast.LENGTH_SHORT).show();
                 } else {
@@ -141,7 +141,7 @@ public class WebViewActivity extends AppCompatActivity {
                     dv.setSystemUiVisibility(flags);
                 });
             }
-        }, "AionStatusBar");
+        }, "LumenStatusBar");
 
         // 手机屏幕监督桥接：用户显式授权后，后台服务可在监控提示音后抓取一帧屏幕。
         webView.addJavascriptInterface(new Object() {
@@ -159,17 +159,17 @@ public class WebViewActivity extends AppCompatActivity {
 
             @JavascriptInterface
             public void stop() {
-                Intent serviceIntent = new Intent(WebViewActivity.this, AionPushService.class);
-                serviceIntent.putExtra("action", AionPushService.ACTION_STOP_PHONE_SCREEN);
+                Intent serviceIntent = new Intent(WebViewActivity.this, LumenPushService.class);
+                serviceIntent.putExtra("action", LumenPushService.ACTION_STOP_PHONE_SCREEN);
                 startService(serviceIntent);
-                getSharedPreferences("aion_prefs", MODE_PRIVATE)
+                getSharedPreferences("lumen_prefs", MODE_PRIVATE)
                         .edit().putBoolean("phone_screen_supervision", false).apply();
                 mainHandler.post(() -> Toast.makeText(WebViewActivity.this, "手机屏幕监督已关闭", Toast.LENGTH_SHORT).show());
             }
 
             @JavascriptInterface
             public boolean isEnabled() {
-                return getSharedPreferences("aion_prefs", MODE_PRIVATE)
+                return getSharedPreferences("lumen_prefs", MODE_PRIVATE)
                         .getBoolean("phone_screen_supervision", false);
             }
 
@@ -178,19 +178,19 @@ public class WebViewActivity extends AppCompatActivity {
                 mainHandler.post(() -> {
                     Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
                     startActivity(intent);
-                    Toast.makeText(WebViewActivity.this, "请在无障碍里开启 Aion Oloth", Toast.LENGTH_LONG).show();
+                    Toast.makeText(WebViewActivity.this, "请在无障碍里开启 Lumen Oloth", Toast.LENGTH_LONG).show();
                 });
             }
 
             @JavascriptInterface
             public boolean isAccessibilityEnabled() {
-                return isAionAccessibilityEnabled();
+                return isLumenAccessibilityEnabled();
             }
 
             @JavascriptInterface
             public void testAccessibilityCapture() {
-                Intent serviceIntent = new Intent(WebViewActivity.this, AionPushService.class);
-                serviceIntent.putExtra("action", AionPushService.ACTION_TEST_ACCESSIBILITY_SCREEN);
+                Intent serviceIntent = new Intent(WebViewActivity.this, LumenPushService.class);
+                serviceIntent.putExtra("action", LumenPushService.ACTION_TEST_ACCESSIBILITY_SCREEN);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     startForegroundService(serviceIntent);
                 } else {
@@ -198,25 +198,25 @@ public class WebViewActivity extends AppCompatActivity {
                 }
                 mainHandler.post(() -> Toast.makeText(WebViewActivity.this, "已触发无障碍截图测试", Toast.LENGTH_SHORT).show());
             }
-        }, "AionPhoneScreen");
+        }, "LumenPhoneScreen");
 
         // 原生麦克风桥接（绕过 getUserMedia 的 HTTPS 限制）
         AudioBridge audioBridge = new AudioBridge(webView);
-        webView.addJavascriptInterface(audioBridge, "AionAudio");
+        webView.addJavascriptInterface(audioBridge, "LumenAudio");
 
         // 原生摄像头桥接（绕过 getUserMedia 的 HTTPS 限制）
         CameraBridge cameraBridge = new CameraBridge(webView);
-        webView.addJavascriptInterface(cameraBridge, "AionCamera");
+        webView.addJavascriptInterface(cameraBridge, "LumenCamera");
 
         // 原生视频录制桥接（复用摄像头+麦克风帧，MediaCodec+MediaMuxer 编码 MP4）
         VideoBridge videoBridge = new VideoBridge(webView, getCacheDir());
         audioBridge.setVideoBridge(videoBridge);
         cameraBridge.setVideoBridge(videoBridge);
-        webView.addJavascriptInterface(videoBridge, "AionVideo");
+        webView.addJavascriptInterface(videoBridge, "LumenVideo");
 
         // 原生 BLE 桥接（绕过 WebView 不支持 Web Bluetooth API 的限制）
-        webView.addJavascriptInterface(new BleBridge(webView, this), "AionBle");
-        webView.addJavascriptInterface(new AionRingBleBridge(webView, this), "AionRingBle");
+        webView.addJavascriptInterface(new BleBridge(webView, this), "LumenBle");
+        webView.addJavascriptInterface(new LumenRingBleBridge(webView, this), "LumenRingBle");
 
         // 图片保存桥接（WebView 不支持 blob URL 下载，用原生方法写入相册）
         webView.addJavascriptInterface(new Object() {
@@ -227,7 +227,7 @@ public class WebViewActivity extends AppCompatActivity {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
                     values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-                    values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Aion");
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Lumen");
                     Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
                     if (uri != null) {
                         java.io.OutputStream os = getContentResolver().openOutputStream(uri);
@@ -238,7 +238,7 @@ public class WebViewActivity extends AppCompatActivity {
                     mainHandler.post(() -> Toast.makeText(WebViewActivity.this, "保存失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
                 }
             }
-        }, "AionImageSaver");
+        }, "LumenImageSaver");
 
         // 权限请求延迟到页面加载完成后，避免系统弹窗阻塞 WebView 加载
         // 见 onPageFinished → requestPermissionsSequentially()
@@ -251,7 +251,7 @@ public class WebViewActivity extends AppCompatActivity {
         s.setAllowFileAccess(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);  // 不使用 HTTP 缓存（静态资源走本地 assets）
-        s.setUserAgentString(s.getUserAgentString() + " AionChatApp/1.0");
+        s.setUserAgentString(s.getUserAgentString() + " LumenChatApp/1.0");
 
         // 让 WebView 的渲染和真实 Chrome 保持一致
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -263,14 +263,14 @@ public class WebViewActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String scheme = request.getUrl().getScheme();
                 // 错误页按钮：重试 / 切换地址
-                if ("aion".equals(scheme)) {
+                if ("lumen".equals(scheme)) {
                     String host = request.getUrl().getHost();
                     if ("retry".equals(host)) {
                         retryCount = 0;
                         pageLoaded = false;
                         webView.loadUrl(targetUrl);
                     } else if ("switch".equals(host)) {
-                        SharedPreferences prefs = getSharedPreferences("aion_prefs", MODE_PRIVATE);
+                        SharedPreferences prefs = getSharedPreferences("lumen_prefs", MODE_PRIVATE);
                         prefs.edit().putBoolean("auto_connect", false).apply();
                         startActivity(new Intent(WebViewActivity.this, LauncherActivity.class));
                         finish();
@@ -351,7 +351,7 @@ public class WebViewActivity extends AppCompatActivity {
                 // 只处理主页面加载失败（非子资源）
                 if (request.isForMainFrame()) {
                     pageLoaded = false;
-                    android.util.Log.e("AionWebView", "页面加载失败: " + error.getDescription());
+                    android.util.Log.e("LumenWebView", "页面加载失败: " + error.getDescription());
                     showErrorPage(view, error.getDescription().toString());
                 }
             }
@@ -410,7 +410,7 @@ public class WebViewActivity extends AppCompatActivity {
             // ── 控制台日志（方便调试） ──
             @Override
             public boolean onConsoleMessage(ConsoleMessage msg) {
-                android.util.Log.d("AionWebView",
+                android.util.Log.d("LumenWebView",
                         msg.message() + " -- line " + msg.lineNumber() + " of " + msg.sourceId());
                 return true;
             }
@@ -424,8 +424,8 @@ public class WebViewActivity extends AppCompatActivity {
         webView.loadUrl(targetUrl);
     }
 
-    private boolean isAionAccessibilityEnabled() {
-        return AionAccessibilityService.isEnabledInSettings(this);
+    private boolean isLumenAccessibilityEnabled() {
+        return LumenAccessibilityService.isEnabledInSettings(this);
     }
 
     /**
@@ -435,7 +435,7 @@ public class WebViewActivity extends AppCompatActivity {
         if (retryCount < MAX_RETRY) {
             retryCount++;
             int delay = Math.min(retryCount * 2000, 8000); // 2s, 4s, 6s, 8s, 8s
-            android.util.Log.i("AionWebView", "自动重试 " + retryCount + "/" + MAX_RETRY + "，" + delay + "ms 后重试");
+            android.util.Log.i("LumenWebView", "自动重试 " + retryCount + "/" + MAX_RETRY + "，" + delay + "ms 后重试");
             String retryHtml = "<html><body style='background:#1a1a2e;color:#e0e0e0;font-family:sans-serif;"
                     + "display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;'>"
                     + "<div style='font-size:48px;margin-bottom:16px'>📡</div>"
@@ -457,9 +457,9 @@ public class WebViewActivity extends AppCompatActivity {
                     + "<div style='font-size:16px;margin-bottom:8px'>无法连接到服务器</div>"
                     + "<div style='font-size:13px;color:#888;margin-bottom:16px'>" + errorMsg + "</div>"
                     + "<div style='font-size:12px;color:#888;margin-bottom:20px'>" + targetUrl + "</div>"
-                    + "<button onclick='window.location.href=\"aion://retry\"' style='padding:12px 32px;font-size:15px;"
+                    + "<button onclick='window.location.href=\"lumen://retry\"' style='padding:12px 32px;font-size:15px;"
                     + "border:none;border-radius:10px;background:#e07c5c;color:white;cursor:pointer;margin-bottom:10px'>🔄 重新连接</button>"
-                    + "<button onclick='window.location.href=\"aion://switch\"' style='padding:10px 28px;font-size:14px;"
+                    + "<button onclick='window.location.href=\"lumen://switch\"' style='padding:10px 28px;font-size:14px;"
                     + "border:1px solid #555;border-radius:10px;background:transparent;color:#aaa;cursor:pointer'>切换地址</button>"
                     + "</body></html>";
             view.loadDataWithBaseURL(null, failHtml, "text/html", "utf-8", null);
@@ -658,11 +658,11 @@ public class WebViewActivity extends AppCompatActivity {
     }
 
     private void showExitDialog() {
-        new AlertDialog.Builder(this, R.style.Theme_AionChat_Dialog)
-            .setTitle("Aion Oloth")
+        new AlertDialog.Builder(this, R.style.Theme_LumenChat_Dialog)
+            .setTitle("Lumen Oloth")
             .setMessage("要切换连接地址还是退出？")
             .setPositiveButton("切换地址", (d, w) -> {
-                SharedPreferences prefs = getSharedPreferences("aion_prefs", MODE_PRIVATE);
+                SharedPreferences prefs = getSharedPreferences("lumen_prefs", MODE_PRIVATE);
                 prefs.edit().putBoolean("auto_connect", false).apply();
                 startActivity(new Intent(this, LauncherActivity.class));
                 finish();
@@ -682,7 +682,7 @@ public class WebViewActivity extends AppCompatActivity {
             webView.evaluateJavascript(
                 "(function(){" +
                 "  if(typeof ws!=='undefined' && ws.readyState!==1){" +
-                "    console.log('[AionApp] WS断线，重连+刷新');" +
+                "    console.log('[LumenApp] WS断线，重连+刷新');" +
                 "    connectWS();" +
                 "    setTimeout(function(){if(typeof loadMessages==='function')loadMessages();},1500);" +
                 "  }" +
@@ -699,7 +699,7 @@ public class WebViewActivity extends AppCompatActivity {
     }
 
     private void notifyServiceForeground(boolean active) {
-        Intent intent = new Intent(this, AionPushService.class);
+        Intent intent = new Intent(this, LumenPushService.class);
         intent.putExtra("action", "set_foreground");
         intent.putExtra("active", active);
         startService(intent);
@@ -715,7 +715,7 @@ public class WebViewActivity extends AppCompatActivity {
                     startActivity(intent);
                 }
             } catch (Exception e) {
-                android.util.Log.w("AionWebView", "电池优化引导失败: " + e.getMessage());
+                android.util.Log.w("LumenWebView", "电池优化引导失败: " + e.getMessage());
             }
         }
     }

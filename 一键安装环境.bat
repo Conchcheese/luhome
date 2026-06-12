@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title Aion Chat 环境安装
+title Lumen Chat 环境安装
 cd /d "%~dp0"
 
 echo ========================================
-echo   Aion Chat 环境一键安装
+echo   Lumen Chat 环境一键安装
 echo ========================================
 echo.
 
@@ -82,14 +82,14 @@ echo.
 echo [4/5] 安装 Python 依赖包（首次可能需要几分钟）...
 if exist "vendor" (
     echo    检测到 vendor 离线包，优先从本地安装...
-    .venv\Scripts\python -m pip install --no-index --find-links "%~dp0vendor" -r "%~dp0aion-chat\requirements.txt" -q
+    .venv\Scripts\python -m pip install --no-index --find-links "%~dp0vendor" -r "%~dp0lumen-chat\requirements.txt" -q
     if errorlevel 1 (
         echo.
         echo    本地离线安装失败，改用「本地包 + 在线源」兜底...
-        .venv\Scripts\python -m pip install --find-links "%~dp0vendor" -r "%~dp0aion-chat\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ -q
+        .venv\Scripts\python -m pip install --find-links "%~dp0vendor" -r "%~dp0lumen-chat\requirements.txt" -i https://mirrors.aliyun.com/pypi/simple/ -q
     )
 ) else (
-    .venv\Scripts\python -m pip install -r "%~dp0aion-chat\requirements.txt" -q
+    .venv\Scripts\python -m pip install -r "%~dp0lumen-chat\requirements.txt" -q
 )
 if errorlevel 1 (
     echo.
@@ -99,7 +99,7 @@ if errorlevel 1 (
     echo.
     echo    1. 如果项目里有 vendor 文件夹，请优先双击「离线安装环境.bat」
     echo       或手动运行：
-    echo       .venv\Scripts\python -m pip install --no-index --find-links vendor -r aion-chat\requirements.txt
+    echo       .venv\Scripts\python -m pip install --no-index --find-links vendor -r lumen-chat\requirements.txt
     echo.
     echo    2. 缺少 C++ 编译工具 → 如果报错包含 "Microsoft Visual C++ 14.0 or greater is required"：
     echo       请下载安装 Microsoft C++ Build Tools：

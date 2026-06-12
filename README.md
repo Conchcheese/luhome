@@ -1,4 +1,4 @@
-# Aion Chat 项目档案
+# Lumen Chat 项目档案
 
 ## 项目定位
 局域网 + 外网（Tailscale 组网）多端同步 AI 聊天程序 + 摄像头智能监控系统。PC/手机浏览器同时使用，支持 PWA 安装为独立 App（全屏无地址栏），数据全部存在本地电脑上。
@@ -16,7 +16,7 @@
 - **EPUB 解析**：ebooklib（EPUB 读取）+ BeautifulSoup4 / lxml（HTML 解析）
 - **基金监控**：akshare（A股/基金数据拉取）+ chinese-calendar（中国节假日/交易日判断）
 - **MCP 娱乐室**：mcp（Python MCP SDK，支持 Streamable HTTP / stdio 传输，接入外部服务如 AI 小镇）
-- **聊天室**：三人群聊（用户 + Aion + Connor-Codex），Connor 代理通过 HTTP 轮询接入 Codex CLI 服务，随机回复顺序，统一时间线上下文（私聊+群聊合并排序，场景切换标记），统一记忆总结（Aion/Connor 各自合并私聊+群聊消息总结，独立锚点，1小时无新消息自动触发），图片收发（用户发图→CLI 管线通过本地绝对路径传递、API 管线通过 base64 内嵌，Codex 回复 `[[image:...]]` 标记→前端渲染，图片存储于 `Connor-Codex/uploads/YYYY-MM-DD/`），TTS 语音合成（Aion/Connor 独立音色配置，硬基流动 CosyVoice2 服务端流式切分+并行合成，通过 SSE 推送音频分段顺序播放，配置持久化 localStorage）
+- **聊天室**：三人群聊（用户 + Lumen + Connor-Codex），Connor 代理通过 HTTP 轮询接入 Codex CLI 服务，随机回复顺序，统一时间线上下文（私聊+群聊合并排序，场景切换标记），统一记忆总结（Lumen/Connor 各自合并私聊+群聊消息总结，独立锚点，1小时无新消息自动触发），图片收发（用户发图→CLI 管线通过本地绝对路径传递、API 管线通过 base64 内嵌，Codex 回复 `[[image:...]]` 标记→前端渲染，图片存储于 `Connor-Codex/uploads/YYYY-MM-DD/`），TTS 语音合成（Lumen/Connor 独立音色配置，硬基流动 CosyVoice2 服务端流式切分+并行合成，通过 SSE 推送音频分段顺序播放，配置持久化 localStorage）
 - **依赖库**：fastapi, uvicorn, httpx, aiosqlite, opencv-python, Pillow, sounddevice, numpy, webrtcvad-wheels, pyncm, pywin32, psutil, ebooklib, beautifulsoup4, lxml, akshare, chinese-calendar, mcp
 
 ## 模块化文件结构
@@ -30,27 +30,27 @@
 │   ├── icon.png                  # 原始图标（1024x941）
 │   ├── icon-192.png              # PWA 图标 192x192（自动生成）
 │   ├── icon-512.png              # PWA 图标 512x512（自动生成）
-│   ├── AionMonitoralart.mp3      # Core 查看监控前的提示音
-│   ├── AIonResponse.mp3          # 语音唤醒回复音频（"诶，我在呢"）
+│   ├── LumenMonitoralart.mp3      # Core 查看监控前的提示音
+│   ├── LumenResponse.mp3          # 语音唤醒回复音频（"诶，我在呢"）
 │   ├── UserIcon.png              # 用户聊天头像
 │   ├── AIIcon.png                # AI 聊天头像
 │   └── 生图锚点.jpg             # SELFIE 参考图（AI 人物一致性锚点）
 │   └── wallpaper/                # 动态壁纸媒体文件（图片+视频）
-├── AionApp/                      # Android WebView 原生壳（Java，Android Studio 项目）
-│   ├── app/src/main/java/com/aion/chat/
+├── LumenApp/                      # Android WebView 原生壳（Java，Android Studio 项目）
+│   ├── app/src/main/java/com/lumen/chat/
 │   │   ├── LauncherActivity.java # 启动页：双地址选择（家庭WiFi / Tailscale）+ 记住选择 + 启动推送服务
 │   │   ├── WebViewActivity.java  # WebView 主页：全屏加载 chat.html，麦克风权限，前后台状态通知推送服务
 │   │   ├── AudioBridge.java      # 原生录音桥：AudioRecord 16kHz → base64 → JS 回调，录制时同步转发 PCM 给 VideoBridge
 │   │   ├── CameraBridge.java     # 原生摄像头桥：legacy Camera API → NV21 字节旋转 → JPEG → JS 轮询（绕过 WebView HTTPS 限制），录制时转发帧给 VideoBridge
 │   │   ├── VideoBridge.java      # 原生视频录制桥：MediaCodec(H.264) + MediaCodec(AAC) + MediaMuxer → MP4，复用 CameraBridge/AudioBridge 的帧数据
-│   │   ├── (AionImageSaver)      # 图片保存桥（WebViewActivity 内匿名类）：JS base64 → MediaStore 写入相册
-│   │   └── AionPushService.java  # 前台推送服务：独立 WebSocket 长连接 + 通知弹窗 + 断线重连 + WakeLock/WifiLock 保活 + ESP32-CAM 桥接（拉帧→上传服务器）
+│   │   ├── (LumenImageSaver)      # 图片保存桥（WebViewActivity 内匿名类）：JS base64 → MediaStore 写入相册
+│   │   └── LumenPushService.java  # 前台推送服务：独立 WebSocket 长连接 + 通知弹窗 + 断线重连 + WakeLock/WifiLock 保活 + ESP32-CAM 桥接（拉帧→上传服务器）
 │   └── build.gradle              # compileSdk 34, minSdk 24, Gradle 8.5 + AGP 8.2.2, OkHttp 4.12.0
 ├── LittleToy/                    # BLE 玩具逆向分析 & 独立 demo
 │   ├── toy_control_v4.html       # 独立 BLE 控制页面（可单独使用）
 │   └── 逆向分析笔记.md           # SOSEXY 设备协议逆向笔记
 ├── 启动壁纸.bat                  # Chrome App 模式无边框全屏启动动态壁纸
-└── aion-chat/
+└── lumen-chat/
     ├── main.py                   # 入口：lifespan、路由注册、静态挂载、WebSocket、PWA 路由、自动记忆总结定时任务（私聊+群聊空闲检测）、Connor自动总结定时任务
     ├── config.py                 # 全局路径、常量、settings/worldbook/chat_status/cam_config 读写
     ├── database.py               # SQLite 初始化（conversations/messages/memories/schedules/theater 等表 + 性能索引）
@@ -90,7 +90,7 @@
     │   ├── fund.py               # 基金监控 API：持仓CRUD、配置开关、数据拉取、手动触发AI分析、缓存读取、历史走势
     │   ├── playground.py         # 娱乐室 API：MCP Server 连接/断开、tool calling 循环、SSE 流式行动日志、经历总结归档
     │   └── wallpaper.py          # 动态壁纸 API：文件列表/配置读写/上传/删除
-    │   └── chatroom.py           # 聊天室 API：房间 CRUD、发消息(SSE)、AI 互聊(SSE)、记忆 CRUD、配置、Connor 状态、总结记忆、图片上传（/api/chatroom/upload）+ 图片路径重写 + TTS流式合成（Aion/Connor独立音色）
+    │   └── chatroom.py           # 聊天室 API：房间 CRUD、发消息(SSE)、AI 互聊(SSE)、记忆 CRUD、配置、Connor 状态、总结记忆、图片上传（/api/chatroom/upload）+ 图片路径重写 + TTS流式合成（Lumen/Connor独立音色）
     ├── activity.py               # 设备活动日志：JSONL 存储、自动清理（保留最近 3 小时）、PC 前台窗口采集（win32gui+psutil）、App 包名→中文名映射、10分钟窗口摘要（时长权重+carry-forward状态追溯）、AI联动开关+Prompt摘要生成
     ├── music.py                  # pyncm 封装层（搜索/歌曲详情/音频URL/MUSIC_U Cookie 登录/匿名登录）
     ├── README.md                 # 本文件
@@ -252,7 +252,7 @@
 ### 摄像头智能监控（Sentinel/Core 双脑架构）
 28. **摄像头集成** — OpenCV DirectShow 后端，支持多摄像头切换，绿屏检测，智能预热验证
 28a. **ESP32-CAM 双摄** — 支持 ESP32-CAM 作为备选摄像头源，前端 tab 切换本地/ESP32，地址支持 IP 或 mDNS 名称（如 `espcam.local`）
-28b. **自动桥接** — 服务器直连 ESP32 失败时，自动通知 App（AionPushService）启动桥接：App 从热点局域网拉帧→上传服务器。直连恢复时自动关闭桥接
+28b. **自动桥接** — 服务器直连 ESP32 失败时，自动通知 App（LumenPushService）启动桥接：App 从热点局域网拉帧→上传服务器。直连恢复时自动关闭桥接
 28c. **户外模式** — 手机开热点 + ESP32 连热点，App 前台服务桥接帧数据到家里服务器（~1fps，约 80KB/帧），AI 仍可触发 Sentinel/[CAM_CHECK]/定时监控
 28d. **零侵入** — 所有下游（Sentinel、Core、[CAM_CHECK]、定时监控、预览）通过 `get_frame_jpeg()` 取帧，无需感知帧来源。`active_source` 默认 `local`，不配置 ESP32 时行为完全不变
 29. **Sentinel 哨兵** — 定时截图后由轻量模型（flash-lite）分析，注入设备活动摘要（近 60 分钟 6 条）作为辅助判断依据，输出结构化 JSON（含概况摘要 summary + 唤醒原因 core_reason）
@@ -264,7 +264,7 @@
 ### Core 主动查看监控（[CAM_CHECK]）
 34. **[CAM_CHECK] 指令** — 摄像头开启时，prompt 中注入能力提示，Core 可在回复中输出 `[CAM_CHECK]` 指令主动请求查看监控画面
 35. **前端实时过滤** — 流式输出时前端实时 strip `[CAM_CHECK]`，用户看不到原始指令
-36. **提示音 + 5秒延迟** — 检测到指令后前端播放 `AionMonitoralart.mp3` 提示音，等待 5 秒给用户反应时间，然后再截图
+36. **提示音 + 5秒延迟** — 检测到指令后前端播放 `LumenMonitoralart.mp3` 提示音，等待 5 秒给用户反应时间，然后再截图
 37. **加载指示器** — 等待期间在 AI 消息下方显示「📷 {AI名} 正在查看监控 ● ● ●」弹跳动画，5秒后自动移除（renderMessages 重建后自动恢复）
 38. **后台截图+AI分析** — 5秒后前端 POST `/api/cam-check-trigger`，后端截图并调用 Core 模型分析画面，结果作为新 assistant 消息保存并 WebSocket 广播
 39. **摄像头离线处理** — 若摄像头未开启，后端发 `cam_offline` SSE 事件，前端显示「📷 摄像头未开启，Core无法查看监控信息」提示
@@ -306,7 +306,7 @@
 43. **半双工通话模式** — 唤醒后进入通话：用户说话 → ASR 识别 → 发送到聊天 → AI 回复 + TTS 播放 → 轮到用户说话，循环往复
 44. **麦克风协调** — AI 说话（TTS 播放 / [CAM_CHECK] 处理）期间暂停录音，服务端 `tts_done` 事件触发前端 `notifyVoiceAiSpeaking(false)` 自动恢复录音；voice.py 发送消息时自动携带 `tts_enabled`/`tts_voice` 参数
 45. **语音挂断** — 说“再见/拜拜/挂断”自动挂断通话，继续监听唤醒词；60 秒无人说话自动挂断
-46. **唤醒回复音频** — 唤醒成功后播放 `public/AIonResponse.mp3`（“诶，我在呢”）
+46. **唤醒回复音频** — 唤醒成功后播放 `public/LumenResponse.mp3`（“诶，我在呢”）
 47. **通话状态指示器** — 前端顶部实时显示：等待唤醒 / 聆听中 / AI 思考中 / 通话结束，含挂断按钮
 48. **完整功能集成** — 语音发送的消息与手动发送完全一致：有 debug 信息、记忆召回、[CAM_CHECK] 能力
 
@@ -357,7 +357,7 @@
 403. **异步非阻塞** — 生图任务通过 `asyncio.create_task()` 在后台执行，不阻塞聊天流和页面操作。生图期间用户可继续发消息、切换页面
 404. **加载指示器** — 检测到生图指令后在 AI 消息下方显示「🎨 {AI名} 正在发送图片 ● ● ●」橙色主题弹跳动画（renderMessages 重建后自动恢复）
 405. **图片消息** — 生图完成后，图片保存到 `data/uploads/img_gen_{timestamp}.{ext}`，创建新 assistant 消息（附带图片附件），通过 WebSocket 广播 `msg_created` + `image_gen_done` 事件
-406. **图片查看器** — 聊天中的图片点击后弹出全屏 lightbox，支持保存图片（浏览器用 blob 下载，Android App 通过 `AionImageSaver` 原生桥接写入相册）
+406. **图片查看器** — 聊天中的图片点击后弹出全屏 lightbox，支持保存图片（浏览器用 blob 下载，Android App 通过 `LumenImageSaver` 原生桥接写入相册）
 407. **前端指令过滤** — 流式输出时前端实时 strip `[SELFIE:xxx]` 和 `[DRAW:xxx]`，用户看不到原始指令
 408. **TTS 过滤** — TTS 合成时自动剥除 `[SELFIE:...]` 和 `[DRAW:...]` 内容，不会被语音朗读
 409. **开关控制** — 聊天配置面板中「AI 生图」开关控制 AI 是否具有生图能力（指令是否注入 prompt），关闭后 AI 不会尝试生图
@@ -391,7 +391,7 @@
 【图片保存（全屏查看器）】
   点击图片 → 全屏 lightbox
   ├ 浏览器：fetch → blob → createObjectURL → <a download> 模拟点击
-  └ Android App：fetch → blob → FileReader → base64 → AionImageSaver.save() → MediaStore 写入相册
+  └ Android App：fetch → blob → FileReader → base64 → LumenImageSaver.save() → MediaStore 写入相册
 ```
 215. **消息保存** — 通话中的视频片段正常保存到聊天记录，视频文件上传到 `data/uploads/`，转写文本存入附件数据
 216. **Chrome 兼容** — PC/手机 Chrome 浏览器使用标准 `getUserMedia` API 获取摄像头+麦克风，无需原生桥；Android WebView 自动 fallback 到 `CameraBridge` + `AudioBridge` + `VideoBridge`
@@ -400,19 +400,19 @@
 ```
 【用户主动发起】
   点击 📹 按钮 → 3 秒等待（播放铃声动画）→ 进入通话界面
-  → 启动摄像头（getUserMedia 或 AionCamera 原生桥）
+  → 启动摄像头（getUserMedia 或 LumenCamera 原生桥）
   → 启动音频流（仅预热，不录制）
   → 底部显示「🎙 按住录制」按钮 + 挂断按钮
 
 【按住录制（核心交互）】
   按下录制按钮 → 开始录制：
     浏览器：双 MediaRecorder（视频+音频 WebM / 纯音频 WebM）
-    Android：AionVideo.startRecord() → MediaCodec H.264 + AAC + MediaMuxer
+    Android：LumenVideo.startRecord() → MediaCodec H.264 + AAC + MediaMuxer
   → 界面显示录制计时 + 红色脉冲动画
   → 上滑进入「取消区域」→ 松手取消录制
   → 正常松手 → 停止录制：
     浏览器：双 Blob → 上传视频 + ASR 转写音频
-    Android：AionVideo.stopRecord() → base64 MP4 → 上传 + 收集的 PCM 帧构建 WAV → ASR
+    Android：LumenVideo.stopRecord() → base64 MP4 → 上传 + 收集的 PCM 帧构建 WAV → ASR
   → 构建 {type:"video_clip", url, duration, transcript}
   → POST 发送消息到聊天（视频 inline_data 发给 Gemini）
   → AI 回复 + TTS → 录制按钮暂时禁用
@@ -432,16 +432,16 @@
   记忆总结/哨兵 → 仅使用转写文本
 
 【Android 原生视频录制桥（VideoBridge.java）】
-  JS 调用 AionVideo.startRecord(width, height)
+  JS 调用 LumenVideo.startRecord(width, height)
   → 创建 MediaCodec 视频编码器（H.264, NV12）+ 音频编码器（AAC, 16kHz mono）
   → MediaMuxer 准备写入临时 MP4 文件
   → CameraBridge.processFrame() 中转发 NV21 帧 → NV21→NV12 转换 → 送入视频编码器
   → AudioBridge 录音线程中转发 PCM 帧 → 送入音频编码器
   → 编码输出同步写入 MediaMuxer
-  → JS 调用 AionVideo.stopRecord() → flush + stop → 读取 MP4 文件 → base64 返回
+  → JS 调用 LumenVideo.stopRecord() → flush + stop → 读取 MP4 文件 → base64 返回
 
 【Android 原生摄像头桥（CameraBridge.java）】
-  JS 调用 AionCamera.start("user"|"environment")
+  JS 调用 LumenCamera.start("user"|"environment")
   → Camera.open() → 设置 640×480 NV21 预览
   → setPreviewCallbackWithBuffer（3 个预分配 buffer，零 GC）
   → 摄像头回调 → 复制数据到 inputBuf → 归还 camera buffer
@@ -506,7 +506,7 @@
 ### 定时监控（[Monitor:...]）
 86. **[Monitor:...] 指令** — AI 可在回复中输出 `[Monitor:YYYY-MM-DDTHH:MM|内容]`，设定定时截图监控任务，例如检查用户是否去睡觉、是否在运动等
 87. **日程类型 `monitor`** — 存储在 schedules 表，类型为 `monitor`，在日程管理面板显示为「👁 监督」（紫色标签），用户可手动添加/删除
-88. **提示音 + 5秒延迟** — 触发时先通过 WebSocket 广播 `monitor_alert`，前端播放 `AionMonitoralart.mp3`，等待 5 秒给用户反应时间，然后再截图
+88. **提示音 + 5秒延迟** — 触发时先通过 WebSocket 广播 `monitor_alert`，前端播放 `LumenMonitoralart.mp3`，等待 5 秒给用户反应时间，然后再截图
 89. **截图 + Core 分析** — 到时间后自动截取摄像头画面，组装 Prompt（人设+上下文+日程列表+截图+监控目的+设备活动摘要（近 120 分钟 12 条））调用 Core 生成回复，不经过哨兵模型，不召回记忆库
 90. **截图双存** — 截图同时保存到 `data/uploads/` 和 `data/screenshots/`
 91. **摄像头离线处理** — 若触发时摄像头未开启，插入系统消息「定时监控触发失败：摄像头未开启」，不发送给 Core
@@ -544,7 +544,7 @@
 135. **POI 周边搜索** — 高德 POI API `/v3/place/around`，以当前坐标为圆心 1000m 半径搜索指定类型 POI（如餐饮、超市）
 
 #### 手机上报流程（Android 端）
-136. **统一 10 分钟间隔** — `AionPushService` 中 `LOCATION_INTERVAL = 10 * 60_000`（10分钟），不区分在家/外出，服务端智能过滤
+136. **统一 10 分钟间隔** — `LumenPushService` 中 `LOCATION_INTERVAL = 10 * 60_000`（10分钟），不区分在家/外出，服务端智能过滤
 137. **active 标志控制** — 每次上报前先 GET `/api/location/config` 读取 `active` 字段（= enabled && 非安静时段），`active=false` 时完全停止 GPS 采集和上报，省电
 138. **GPS 获取** — 使用 `LocationManager.requestSingleUpdate()`，优先 GPS_PROVIDER，fallback NETWORK_PROVIDER，60 秒超时
 139. **上报数据** — POST `/api/location/heartbeat` 发送 `{lng, lat, accuracy}`，坐标为 WGS84 原始值，服务端负责坐标转换
@@ -572,7 +572,7 @@
 
 ### 高德地图定位工作流程
 ```
-【手机 GPS 上报（Android AionPushService 定位线程）】
+【手机 GPS 上报（Android LumenPushService 定位线程）】
   每 10 分钟唤醒 → GET /api/location/config 检查 active 字段
   ├ active = false → 跳过本轮（安静时段或功能关闭）
   └ active = true → LocationManager.requestSingleUpdate()
@@ -687,7 +687,7 @@
 ```
 
 ### 上下文系统消息注入
-155. **选择性注入** — 发送给模型的上下文中，system 消息不再全部过滤，而是选择性保留「点歌」和「查看监控」相关的系统事件（如"Aion查看了监控画面"、"Aion搜索了周边的餐饮美食信息"），以 `[系统事件]` 前缀包装为 user 角色注入，让 AI 知道之前发生过什么
+155. **选择性注入** — 发送给模型的上下文中，system 消息不再全部过滤，而是选择性保留「点歌」和「查看监控」相关的系统事件（如"Lumen查看了监控画面"、"Lumen搜索了周边的餐饮美食信息"），以 `[系统事件]` 前缀包装为 user 角色注入，让 AI 知道之前发生过什么
 156. **范围限制** — 系统消息与普通消息共享同一个 `LIMIT` 查询，上下文默认 30 条窗口内的系统事件才会被带入，不会加载全部历史
 157. **关键词过滤** — 只有包含"查看了监控"、"搜索了"等关键词的 system 消息才会保留，闹铃/日程/玩具等系统消息仍然不进入上下文
 
@@ -852,7 +852,7 @@
 ### 设备活动日志系统（PC + 手机）
 170. **双设备活动采集** — 自动记录 PC 前台窗口和手机前台 App 的使用情况，存储为 JSONL 日志，按日期分文件，保留最近 3 小时
 171. **PC 前台窗口采集** — 后台守护线程每 60 秒通过 `win32gui.GetForegroundWindow()` 获取当前窗口标题 + `psutil.Process.name()` 获取进程名，**每分钟无条件记录**（窗口没变也写入，确保摘要时长计算准确），自动过滤 Program Manager（桌面）
-172. **Android 前台 App 上报** — `AionPushService` 中独立线程每 60 秒通过 `UsageEvents` API（主）/ `UsageStatsManager`（备）获取当前前台应用包名，POST 到 `/api/activity/report`，**每次轮询都上报**（无去重，服务端摘要层负责合并）；同时注册 `BroadcastReceiver` 监听屏幕开关事件
+172. **Android 前台 App 上报** — `LumenPushService` 中独立线程每 60 秒通过 `UsageEvents` API（主）/ `UsageStatsManager`（备）获取当前前台应用包名，POST 到 `/api/activity/report`，**每次轮询都上报**（无去重，服务端摘要层负责合并）；同时注册 `BroadcastReceiver` 监听屏幕开关事件
 173. **App 名称解析** — 服务端维护 `KNOWN_APPS` 映射表（80+ 常见应用），将包名/进程名转为中文显示名（如 `com.xingin.xhs` → `小红书`、`chrome.exe` → `Chrome`），自动过滤系统应用（桌面、SystemUI 等）
 174. **JSONL 存储 + 自动清理** — 每条日志按日期写入 `data/activity_logs/{YYYY-MM-DD}.jsonl`，`cleanup_old_activity_logs()` **每 5 分钟最多执行一次**清理超过 3 小时的旧条目
 175. **并发安全** — `threading.Lock` 保护 JSONL 文件读写，防止 PC 后台线程和手机 API 协程并发写入导致数据丢失
@@ -880,7 +880,7 @@
     → 标题变化？→ 是 → 控制台打印 + WebSocket 广播
     → 每 5 分钟触发 cleanup_old_activity_logs()
 
-【Android 前台 App 上报（AionPushService activityThread）】
+【Android 前台 App 上报（LumenPushService activityThread）】
   服务启动 → startActivityThread()
   → 独立线程循环（60 秒间隔）：
     UsageEvents API 查询最近 120 秒事件 → 取最后一个 ACTIVITY_RESUMED 的包名
@@ -1001,18 +1001,18 @@
 105. **静音音频保活** — 页面加载后自动创建 AudioContext 播放无声音频（30秒循环），防止手机浏览器后台休眠导致 WebSocket 断连和闹铃失效
 106. **Web Notification** — 闹铃触发和监控提醒时通过 `Notification API` 发送系统级推送通知，即使浏览器在后台也能看到
 
-### Android 原生 App（AionApp / Aion Oloth）
+### Android 原生 App（LumenApp / Lumen Oloth）
 107. **WebView 壳应用** — Java Android 项目，WebView 加载 chat.html，支持文件上传、麦克风权限、全屏沉浸
 108. **双地址启动页** — LauncherActivity 提供「家庭WiFi」和「Tailscale」两个地址入口，支持「记住选择」下次自动进入
 109. **原生录音桥 AudioBridge** — 绕过 WebView 中 `getUserMedia` 需要 HTTPS 的限制，使用 Android 原生 `AudioRecord`（16kHz, VOICE_RECOGNITION）录音，通过 `@JavascriptInterface` 将 base64 PCM 数据回调到 JS。视频录制期间自动转发 PCM 帧给 VideoBridge
-110. **原生视频录制桥 VideoBridge** — MediaCodec(H.264) + MediaCodec(AAC) + MediaMuxer 编码 MP4，复用 CameraBridge 的视频帧和 AudioBridge 的音频帧进行视频录制，录制期间摄像头预览不中断。JS 通过 `window.AionVideo` 接口控制录制（`startRecord`/`stopRecord`/`cancel`），`stopRecord` 返回 base64 编码的 MP4 数据
+110. **原生视频录制桥 VideoBridge** — MediaCodec(H.264) + MediaCodec(AAC) + MediaMuxer 编码 MP4，复用 CameraBridge 的视频帧和 AudioBridge 的音频帧进行视频录制，录制期间摄像头预览不中断。JS 通过 `window.LumenVideo` 接口控制录制（`startRecord`/`stopRecord`/`cancel`），`stopRecord` 返回 base64 编码的 MP4 数据
 111. **手势导航适配** — 兼容 Vivo X300 Pro 等全面屏手势导航，返回键弹出对话框（切换地址 / 退出 / 取消）
 
-### Android 前台推送服务（AionPushService）
-115. **前台服务 + 独立 WebSocket** — `AionPushService` 作为 Android 前台服务运行，通过 OkHttp 维持独立于 WebView 的 WebSocket 长连接（`/ws`），不依赖页面生命周期
+### Android 前台推送服务（LumenPushService）
+115. **前台服务 + 独立 WebSocket** — `LumenPushService` 作为 Android 前台服务运行，通过 OkHttp 维持独立于 WebView 的 WebSocket 长连接（`/ws`），不依赖页面生命周期
 115b. **GPS 定位上报** — 独立定位线程每 10 分钟 GET `/api/location/config` 检查 `active` 字段，`active=true` 时获取 GPS 坐标并 POST `/api/location/heartbeat`，`active=false` 时跳过（省电）
 115c. **设备活动上报** — 独立活动线程每 60 秒通过 UsageEvents API 获取前台应用包名，POST `/api/activity/report`；BroadcastReceiver 监听屏幕开关事件即时上报。需要 `PACKAGE_USAGE_STATS` 权限（AndroidManifest 声明 + 用户手动在「使用情况访问权限」中授权）
-116. **三级通知渠道** — ① `aion_keepalive`（保活）：常驻通知栏"Aion 在线中 ✨"，低优先级不打扰；② `aion_messages`（消息）：AI 回复通知，默认优先级；③ `aion_alarm`（闹铃与监控）：高优先级 heads-up 弹出式通知 + 声音振动 + 锁屏可见
+116. **三级通知渠道** — ① `lumen_keepalive`（保活）：常驻通知栏"Lumen 在线中 ✨"，低优先级不打扰；② `lumen_messages`（消息）：AI 回复通知，默认优先级；③ `lumen_alarm`（闹铃与监控）：高优先级 heads-up 弹出式通知 + 声音振动 + 锁屏可见
 117. **智能通知过滤** — 只推送 3 种消息：`schedule_alarm`（闹铃⏰）、`monitor_alert`（定时监控提醒👁）、`new_message` 中 role=assistant 的 AI 回复（💬）。系统消息/cam_check/msg_created 等均不推送，避免通知轰炸
 118. **前后台状态感知** — WebViewActivity 的 `onResume`/`onPause` 通过 Intent 通知 Service 当前是否在前台。app 前台时只推送闹铃和监控（高优先级），不推送 AI 消息（避免重复）；app 后台/锁屏时推送所有类型
 119. **WakeLock + WiFi Lock 保活** — `PARTIAL_WAKE_LOCK` 防止 CPU 深度休眠，`WIFI_MODE_FULL_LOW_LATENCY` 防止锁屏后 WiFi 休眠。这是保证锁屏后 WebSocket 不断的关键
@@ -1029,8 +1029,8 @@
 ### Android 推送服务工作流程
 ```
 【启动】
-  LauncherActivity 选择地址 → startForegroundService(AionPushService, wsUrl)
-  → Service 创建前台通知"Aion 在线中 ✨" → 获取 WakeLock + WiFi Lock
+  LauncherActivity 选择地址 → startForegroundService(LumenPushService, wsUrl)
+  → Service 创建前台通知"Lumen 在线中 ✨" → 获取 WakeLock + WiFi Lock
   → OkHttp WebSocket 连接 ws://host:port/ws → 启动心跳线程 + 注册 NetworkCallback
   → 启动定位线程（10 分钟间隔，独立 Java Thread）
   → 启动活动上报线程（60 秒间隔，独立 Java Thread）+ 注册屏幕亮灭 BroadcastReceiver
@@ -1090,8 +1090,8 @@
 ### 手机端语音工作流程
 ```
 【AudioBridge 原生录音】
-  WebViewActivity 注入 window.AionAudio JS 接口
-  → remoteVoice.start() 调用 AionAudio.start()
+  WebViewActivity 注入 window.LumenAudio JS 接口
+  → remoteVoice.start() 调用 LumenAudio.start()
   → AudioRecord(16kHz, VOICE_RECOGNITION) 启动录音线程
   → 每 40ms 帧 base64 编码 → evaluateJavascript("remoteVoice._onNativeChunk(...)")
   → JS 端能量 VAD 判断人声（RMS > 阈值）
@@ -1108,7 +1108,7 @@
 53. **WebSocket 事件扩展** — cam_check 和 debug 事件同时通过 SSE + WebSocket 双通道广播，语音发送的消息也能获得完整 debug 信息
 
 ### PWA 支持（Progressive Web App）
-54. **Web App Manifest** — `manifest.json` 声明 App 名称（Aion Chat）、图标（192/512）、主题色、全屏 standalone 模式
+54. **Web App Manifest** — `manifest.json` 声明 App 名称（Lumen Chat）、图标（192/512）、主题色、全屏 standalone 模式
 55. **Service Worker** — `sw.js` 从根路径 `/sw.js` 提供，作用域覆盖全站，让浏览器识别为可安装 PWA
 56. **手机安装为独立 App** — Android Chrome 添加到主屏幕后全屏运行，无地址栏/标签栏，体验接近原生 App
 57. **iOS 支持** — 通过 `apple-mobile-web-app-capable` + `apple-touch-icon` meta 标签支持 Safari 添加到主屏幕
@@ -1404,7 +1404,7 @@
 - **音乐前端渲染**：`msgMusicCards` 字典按消息 ID 存储卡片数据，`renderMusicCards()` / `buildMusicCardHtml()` 生成卡片 DOM，`playMusicOnline()` 创建固定底部播放器，`closeMusicPlayer()` 停止并移除
 - **日程/闹铃架构**：`schedule.py` 的 `ScheduleManager` 在独立线程运行（30 秒间隔），通过 `run_coroutine_threadsafe` 桥接主事件循环执行 DB 操作和 WebSocket 广播；`_fire_alarm` 复用 camera.py 相同的 Core 唤醒模式（世界书前缀+记忆+历史+触发提示）；`_parse_dt` 支持 6 种日期时间格式，仅日期时默认 09:00
 - **日程系统消息**：`_sys_msg()` 辅助函数在日程创建/删除时插入 system 角色消息到当前对话，风格与哨兵唤醒消息（📷）一致，使用 📅/🗑️ 图标前缀
-- **AionPushService 架构**：前台服务使用 OkHttp 4.12.0 维持独立 WebSocket 连接，与 WebView 内的 JS WebSocket 并行但互不干扰。通知通过 `NotificationManager` 发送，渠道 ID 区分优先级。心跳线程是纯 Java `Thread`（非 HandlerThread），`Thread.sleep()` 不依赖 Android Looper 消息队列，锁屏后仍能正常唤醒
+- **LumenPushService 架构**：前台服务使用 OkHttp 4.12.0 维持独立 WebSocket 连接，与 WebView 内的 JS WebSocket 并行但互不干扰。通知通过 `NotificationManager` 发送，渠道 ID 区分优先级。心跳线程是纯 Java `Thread`（非 HandlerThread），`Thread.sleep()` 不依赖 Android Looper 消息队列，锁屏后仍能正常唤醒
 - **推送与前端 WebSocket 的关系**：Service 的 WebSocket 仅用于接收消息并弹通知，不做任何 UI 操作。WebView 内的 JS WebSocket 负责完整的 UI 交互。两条连接同时连到服务端 `/ws`，`ConnectionManager.active` 列表中会有两个客户端
 - **高德定位架构**：`location.py` 独立模块，`process_heartbeat(lng, lat, accuracy, is_gcj02, skip_sentinel)` 为核心入口。`skip_sentinel` 参数用于测试脚本避免触发哨兵通知。所有高德 API 调用使用 httpx 异步请求，Key 从 `data/location_config.json` 读取
 - **WGS84→GCJ-02 坐标转换**：`wgs84_to_gcj02()` 实现完整的国测局加密偏移算法（含 Krasovsky 椭球参数），中国境内坐标最大偏移约 500-700 米。Android 端不做转换，统一由服务端处理
@@ -1412,7 +1412,7 @@
 - **状态机防误触**：家坐标为 (0,0) 或未设置时保持 `unknown` 状态不做研判；每次心跳先算距离再判状态，状态切换必须经过完整级处理
 - **哨兵通知**：`_notify_sentinel()` 调用 `gemini-3.1-flash-lite-preview`，注入世界书人设 + `chat_status.json` 聊天状态 + 记忆召回 + 详细位置上下文（距离/地址/天气），生成自然语言通知消息
 - **POI 按需搜索**：`perform_poi_check()` 模式同 `perform_cam_check()`：异步执行，使用最新缓存坐标重新逆地理编码 + POI 搜索 → 构建 system 消息 → 调用 Core 生成跟进回复 → 插入对话 + WebSocket 广播
-- **Android 定位线程**：`AionPushService` 中 `startLocationThread()` 启动独立 Java Thread（非 HandlerThread），`Thread.sleep(10min)` 循环，每次先 GET `/api/location/config` 检查 `active` 字段，`active = enabled && !is_location_quiet_hours()`，false 时完全跳过 GPS 采集
+- **Android 定位线程**：`LumenPushService` 中 `startLocationThread()` 启动独立 Java Thread（非 HandlerThread），`Thread.sleep(10min)` 循环，每次先 GET `/api/location/config` 检查 `active` 字段，`active = enabled && !is_location_quiet_hours()`，false 时完全跳过 GPS 采集
 - **定位 UI**：chat.html 设置面板中「📍 定位追踪」为可折叠区块（默认收起），监控日志弹窗底部增加「📍 缓存定位」调试行（显示坐标/状态/地址/精度/更新时间）
 - **POI 搜索指示器**：前端 `poiSearchMsgId` + `poiSearchCategories` 全局变量跟踪，`handlePoiSearch()` 创建蓝色弹跳动画指示器（样式同 cam-check 绿色），45 秒安全超时自动消失，新 assistant 消息到达时自动移除
 - **前台服务类型扩展**：`AndroidManifest.xml` 中 `foregroundServiceType="dataSync|location"`，`startForeground()` 传入 `FOREGROUND_SERVICE_TYPE_DATA_SYNC | FOREGROUND_SERVICE_TYPE_LOCATION`，同时声明 `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` + `ACCESS_BACKGROUND_LOCATION` 权限
@@ -1420,7 +1420,7 @@
 
 ## 踩坑记录 & 经验教训（Android 推送服务）
 
-> 以下是开发 AionPushService 过程中遇到的所有坑和最终解决方案，务必参考避免重复踩坑。
+> 以下是开发 LumenPushService 过程中遇到的所有坑和最终解决方案，务必参考避免重复踩坑。
 
 ### 坑 1：权限弹窗被 finish() 秒杀
 **现象**：安装后不弹通知权限请求和电池优化引导。
@@ -1470,7 +1470,7 @@
 ### 坑 8：vivo 电池策略默认杀后台
 **现象**：所有代码逻辑正确，但 vivo 手机上锁屏后仍然收不到消息。
 **原因**：vivo OriginOS 默认开启"智能后台管理"，会冻结或杀掉后台 app 的进程（包括前台服务）。
-**解决**：手机设置 → 电池 → 后台耗电管理 → 找到 Aion Oloth → 改为"不限制后台"（关闭智能管理）。
+**解决**：手机设置 → 电池 → 后台耗电管理 → 找到 Lumen Oloth → 改为"不限制后台"（关闭智能管理）。
 **教训**：**国产 ROM（vivo/OPPO/小米/华为）的电池优化会无视前台服务权限直接冻结进程。必须在 app 内引导用户关闭电池优化（`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` + 手动设置）。这是所有国产安卓推送的终极大坑。**
 
 ### 坑 9：服务端 except WebSocketDisconnect 不够
@@ -1480,7 +1480,7 @@
 **教训**：**WebSocket 端点的异常处理不要只 catch 特定异常，用 `except Exception` + `finally` 确保连接清理。**
 
 ### 坑 10：CLI 管线图片不能用 base64 内嵌
-**现象**：用户在 Aion 私聊（Gemini CLI）和 Connor 私聊/群聊（Codex CLI）发送图片时报错。Gemini CLI: `Separator is not found, and chunk exceed the limit`；Codex CLI: `Input exceeds the maximum length of 1048576 characters`。
+**现象**：用户在 Lumen 私聊（Gemini CLI）和 Connor 私聊/群聊（Codex CLI）发送图片时报错。Gemini CLI: `Separator is not found, and chunk exceed the limit`；Codex CLI: `Input exceeds the maximum length of 1048576 characters`。
 **原因**：CLI 工具通过 stdin 管道接收 prompt，有长度限制（Codex CLI 明确 1MB 上限）。一张普通照片 base64 编码后几百 KB 到几 MB，直接内嵌必然超限。而 Gemini 原生 API 通过 HTTP POST JSON body 传输，几乎无大小限制，所以同样的 base64 方式在 API 调用中没问题。
 **解决**：CLI 管线改为传本地文件绝对路径，让 CLI 自行读取文件。API 管线（硅基流动/Gemini 原生）保持 base64 不变。
 **教训**：**不同 AI 调用方式对输入大小的限制不同。CLI stdin 有长度上限，不能简单复用 API 的 base64 方案。CLI 工具原生支持读取本地文件路径，应该利用这个能力。**
@@ -1515,7 +1515,7 @@
 双击 一键启动.bat
 
 # 方式二：命令行
-cd aion-chat
+cd lumen-chat
 python main.py
 ```
 服务监听 `0.0.0.0:8080`
@@ -1594,7 +1594,7 @@ python main.py
 
 ### 2026-05-09 — 统一时间线上下文 + 统一记忆总结
 
-**背景**：之前 Aion 私聊只能看到私聊历史，群聊只能看到群聊历史，两个 AI 的记忆总结也各自独立（Connor 私聊和群聊分别总结，群聊记忆还要同步一份到 Aion 主库）。改为统一时间线，让每个 AI 都能同时看到私聊和群聊内容，记忆总结也合并处理。
+**背景**：之前 Lumen 私聊只能看到私聊历史，群聊只能看到群聊历史，两个 AI 的记忆总结也各自独立（Connor 私聊和群聊分别总结，群聊记忆还要同步一份到 Lumen 主库）。改为统一时间线，让每个 AI 都能同时看到私聊和群聊内容，记忆总结也合并处理。
 
 **改动内容**：
 
@@ -1603,16 +1603,16 @@ python main.py
    - `render_merged_timeline(merged, who)`：将合并时间线转为 AI 历史格式，私聊/群聊混合时自动插入场景切换标记 `[以下为群聊记录]` / `[以下为私聊记录]`，消息前缀带 `[群聊]` / `[私聊]` 标签
    - `build_ability_block()`、`build_memory_blocks()`、`strip_tool_commands()` 等工具函数从各处抽取统一
 
-2. **`routes/chat.py`** — Aion 私聊上下文统一：
-   - `send_message`、`edit_resend`、`regenerate` 三个函数的历史构建改为 `fetch_merged_timeline("aion")` + `render_merged_timeline()`，Aion 在私聊中也能看到群聊内容
+2. **`routes/chat.py`** — Lumen 私聊上下文统一：
+   - `send_message`、`edit_resend`、`regenerate` 三个函数的历史构建改为 `fetch_merged_timeline("lumen")` + `render_merged_timeline()`，Lumen 在私聊中也能看到群聊内容
 
 3. **`chatroom.py`** — 群聊上下文 + Connor 记忆统一：
-   - `build_aion_group_context()` / `build_connor_group_context()`：改用统一时间线，移除旧的跨窗口上下文注入
-   - `digest_chatroom()`：合并 Connor 1v1 + 群聊消息统一总结，使用 `connor_unified` 锚点，scope 固定为 `"connor"`，删除"群聊记忆同步写入 Aion 主库"逻辑（两个 AI 各管各的记忆）
+   - `build_lumen_group_context()` / `build_connor_group_context()`：改用统一时间线，移除旧的跨窗口上下文注入
+   - `digest_chatroom()`：合并 Connor 1v1 + 群聊消息统一总结，使用 `connor_unified` 锚点，scope 固定为 `"connor"`，删除"群聊记忆同步写入 Lumen 主库"逻辑（两个 AI 各管各的记忆）
    - `_connor_1v1_auto_digest_loop()`：不再查找特定房间，直接调用 `digest_chatroom()` 统一总结
    - `connor_1v1_on_message()`：群聊消息也触发计时器重置
 
-4. **`memory.py`** — Aion 记忆总结统一：
+4. **`memory.py`** — Lumen 记忆总结统一：
    - `_do_digest()`：在私聊消息基础上追加查询群聊 `chatroom_messages`，标记 `_source`（private/group），混合来源时消息格式带 `[群聊]` / `[私聊]` 标签
 
 5. **`main.py`** — 自动总结空闲检测增强：
@@ -1622,7 +1622,7 @@ python main.py
    - `_save_msg()`：群聊消息也触发 `connor_1v1_on_message()` 重置自动总结计时器
 
 7. **Bug 修复**：
-   - 流式输出气泡残留原始指令：`aion_done` / `connor_done` 事件用服务端清洗后的内容替换 streamingText
+   - 流式输出气泡残留原始指令：`lumen_done` / `connor_done` 事件用服务端清洗后的内容替换 streamingText
    - 闹铃/日程创建时缺少系统消息：在 `process_schedule_commands` 之前预检测指令并插入系统提示
    - 音乐点歌后不自动播放：添加 `autoplay: True` 参数
 
@@ -1729,5 +1729,5 @@ python main.py
 - 搬迁目录后需修改 `一键启动.bat` 中的路径（第11行 `cd /d` 后面的绝对路径）
 - 所有数据路径都是相对路径，搬迁不影响
 - VPN (singbox) 可能干扰局域网访问，必要时关闭或加直连规则
-- 防火墙已添加 8080 端口入站规则（规则名 "Aion Chat 8080"）
+- 防火墙已添加 8080 端口入站规则（规则名 "Lumen Chat 8080"）
 - 备份只需复制 `data/` 文件夹

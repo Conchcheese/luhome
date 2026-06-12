@@ -1,4 +1,4 @@
-/* ── Aion Common Styles ── */
+/* ── Lumen Common Styles ── */
 :root {
   --bg: #fff9f5;
   --surface: #ffffff;
@@ -31,11 +31,11 @@ body { font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-se
   margin: 0 auto;
 }
 
-html.aion-app:not(.aion-iframe) .sub-page {
+html.lumen-app:not(.lumen-iframe) .sub-page {
   padding-top: 34px;
 }
 
-html.aion-app:not(.aion-iframe) .sub-page::before {
+html.lumen-app:not(.lumen-iframe) .sub-page::before {
   content: "";
   position: fixed;
   top: 0;
@@ -44,7 +44,7 @@ html.aion-app:not(.aion-iframe) .sub-page::before {
   height: 34px;
   z-index: 999;
   pointer-events: none;
-  background: var(--aion-safe-bg, var(--bg));
+  background: var(--lumen-safe-bg, var(--bg));
 }
 
 /* ── 顶部导航栏 ── */

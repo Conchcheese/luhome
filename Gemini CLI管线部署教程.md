@@ -1,6 +1,6 @@
 # Gemini CLI 管线完整部署教程
 
-> 本教程面向朋友，帮你从零开始部署 Aion Chat 项目并接通 Gemini CLI 管线。
+> 本教程面向朋友，帮你从零开始部署 Lumen Chat 项目并接通 Gemini CLI 管线。
 > CLI 线路**完全免费**，走 Google 个人账号 OAuth 认证，不需要付费、不需要 API Key。
 > 你需要用自己的 Google 账号做一次登录授权，之后程序自动复用。
 
@@ -8,7 +8,7 @@
 
 ## 📌 整体思路
 
-Aion Chat 有多条 AI 管线（Gemini REST API / 硅基流动 / 中转站 / Gemini CLI / Codex CLI）。其中 **Gemini CLI** 管线的特点是：
+Lumen Chat 有多条 AI 管线（Gemini REST API / 硅基流动 / 中转站 / Gemini CLI / Codex CLI）。其中 **Gemini CLI** 管线的特点是：
 
 - **完全免费**，通过 Google OAuth 用你自己的 Google 账号调用 Gemini 模型
 - **不需要 API Key**，不走 REST API，而是在本地启动一个 `gemini` 子进程
@@ -18,7 +18,7 @@ Aion Chat 有多条 AI 管线（Gemini REST API / 硅基流动 / 中转站 / Gem
 
 ---
 
-## 🔧 第一部分：Aion Chat 基础环境安装
+## 🔧 第一部分：Lumen Chat 基础环境安装
 
 > 如果你已经按照「给朋友的部署教程.md」完成了基础安装，可以直接跳到第二部分。
 
@@ -114,7 +114,7 @@ gemini
 7. 随便输入一句话测试（如 `hello`），确认 Gemini 能正常回复
 8. 输入 `/quit` 退出交互模式
 
-> ✅ 认证信息会保存在你的用户目录下，**只需要做一次**。之后 Aion Chat 调用 CLI 时会自动复用你的认证。
+> ✅ 认证信息会保存在你的用户目录下，**只需要做一次**。之后 Lumen Chat 调用 CLI 时会自动复用你的认证。
 >
 > ⚠️ 认证是**绑定你的 Google 账号**的，每个人用自己的账号登录就行。别人的认证不会影响你，你的认证也不会影响别人。
 
@@ -130,18 +130,18 @@ gemini -p "你好，请用一句话介绍你自己"
 
 ---
 
-## ⚙️ 第三部分：配置 Aion Chat 使用 CLI 管线
+## ⚙️ 第三部分：配置 Lumen Chat 使用 CLI 管线
 
 ### 3.1 确认项目文件是最新的
 
 你拿到的项目文件夹里，以下两个文件包含 CLI 管线代码：
 
-- `aion-chat/config.py` — 模型列表里有 `CLI-2.5pro`、`CLI-3.1pro`、`CLI-2.5flash`
-- `aion-chat/ai_providers.py` — 包含 `call_gemini_cli()` 函数
+- `lumen-chat/config.py` — 模型列表里有 `CLI-2.5pro`、`CLI-3.1pro`、`CLI-2.5flash`
+- `lumen-chat/ai_providers.py` — 包含 `call_gemini_cli()` 函数
 
 如果这两个文件是从我这边同步过来的最新版本，就不需要任何代码修改。
 
-### 3.2 启动 Aion Chat
+### 3.2 启动 Lumen Chat
 
 双击 **「一键启动.bat」**，等待服务启动。
 
@@ -161,14 +161,14 @@ gemini -p "你好，请用一句话介绍你自己"
 
 ### 3.4 可选但推荐：配置 Gemini Free Key（哨兵 + 向量记忆）
 
-虽然 CLI 管线不需要 API Key 就能聊天，但 Aion Chat 的 **记忆系统**（向量 Embedding）和 **摄像头哨兵** 用的是 Gemini REST API，这两个功能需要一个 Gemini API Key。
+虽然 CLI 管线不需要 API Key 就能聊天，但 Lumen Chat 的 **记忆系统**（向量 Embedding）和 **摄像头哨兵** 用的是 Gemini REST API，这两个功能需要一个 Gemini API Key。
 
 如果你不需要记忆和监控功能，可以跳过这步。如果需要：
 
 1. 打开 https://aistudio.google.com/apikey （需要科学上网）
 2. 用你的 Google 账号登录
 3. 点 **「Create API Key」** 创建一个免费 Key
-4. 在 Aion Chat 的设置页面（`http://localhost:8080/settings`），把 Key 填到 **「Gemini Free Key（哨兵+向量）」** 框里
+4. 在 Lumen Chat 的设置页面（`http://localhost:8080/settings`），把 Key 填到 **「Gemini Free Key（哨兵+向量）」** 框里
 
 > 💡 这个 Free Key 是免费的 Gemini API Key，和 CLI 的 OAuth 认证是两套独立的东西。Free Key 用于后台轻量任务（向量化、哨兵分析），免费额度完全够用。
 
@@ -188,7 +188,7 @@ Gemini CLI 每次调用都需要能连通 Google 服务。请确保：
 
 ### 如果终端走不通代理
 
-在启动 Aion Chat 之前，设置环境变量（在 `一键启动.bat` 前面加，或者单独在终端执行）：
+在启动 Lumen Chat 之前，设置环境变量（在 `一键启动.bat` 前面加，或者单独在终端执行）：
 
 **PowerShell：**
 ```powershell
@@ -217,7 +217,7 @@ set HTTPS_PROXY=http://127.0.0.1:7890
 - [ ] 终端执行 `npm install -g @google/gemini-cli`
 - [ ] 终端执行 `gemini`，完成 Google OAuth 登录授权
 - [ ] 测试 `gemini -p "你好"` 确认能正常回复
-- [ ] 双击「一键启动.bat」启动 Aion Chat
+- [ ] 双击「一键启动.bat」启动 Lumen Chat
 - [ ] 浏览器打开 `http://localhost:8080/chat`
 - [ ] 右上角切换模型到 `CLI-xxx`
 - [ ] 发消息测试，确认能正常回复
@@ -234,9 +234,9 @@ set HTTPS_PROXY=http://127.0.0.1:7890
 3. **关掉终端再重新打开**，然后再试 `gemini --version`
 
 ### Q: 报错 "未找到 gemini CLI"
-**A:** 这是 Aion Chat 后端的报错，说明 Python 进程找不到 gemini 命令。
+**A:** 这是 Lumen Chat 后端的报错，说明 Python 进程找不到 gemini 命令。
 1. 确认 `gemini --version` 在你的终端能正常运行
-2. 如果你是装完 Node.js 之后没重启过电脑，试试**重启电脑**再启动 Aion Chat
+2. 如果你是装完 Node.js 之后没重启过电脑，试试**重启电脑**再启动 Lumen Chat
 3. 检查你的 PATH 环境变量里是否有 Node.js 和 npm 的路径
 
 ### Q: CLI 回复很慢（10-30 秒才开始）
@@ -258,7 +258,7 @@ npm install -g @google/gemini-cli
 
 ### Q: 发图片给 AI 报错
 **A:** 图片通过 CLI 原生 `@路径` 语法传递，代码已自动处理。如果报错检查：
-1. 图片文件是否存在于 `aion-chat/data/uploads/` 目录
+1. 图片文件是否存在于 `lumen-chat/data/uploads/` 目录
 2. 文件路径中是否有中文文件夹名（建议整个项目放在英文路径下）
 
 ### Q: 想用 CLI 以外的模型（REST API）
@@ -271,7 +271,7 @@ npm install -g @google/gemini-cli
 
 ## 💡 补充说明
 
-- **不需要额外启动任何服务**。Aion Chat 的 Python 后端每次发消息时自动创建 gemini CLI 子进程，用完即销毁。
+- **不需要额外启动任何服务**。Lumen Chat 的 Python 后端每次发消息时自动创建 gemini CLI 子进程，用完即销毁。
 - **电脑重启后不需要重新认证**。OAuth 认证信息保存在本地用户目录下，持久有效。
 - **CLI 管线和 REST API 管线可以共存**。你可以同时配置 Gemini API Key 和 CLI，在聊天页面随时切换模型。
 - 所有功能（世界书人设、向量记忆、TTS 语音合成、摄像头监控、日程闹铃、音乐点歌、AI 生图、视频通话等）在 CLI 管线下全部正常工作。
@@ -302,9 +302,9 @@ irm https://antigravity.google/cli/install.ps1 | iex
 
 > 💡 登录一次就行，之后不需要重复登录。
 
-### 在 Aion Chat 中使用
+### 在 Lumen Chat 中使用
 
-1. 启动 Aion Chat 后，在聊天窗口的**模型选择**下拉菜单里选择 **「Antigravity」**
+1. 启动 Lumen Chat 后，在聊天窗口的**模型选择**下拉菜单里选择 **「Antigravity」**
 2. 发消息就行了，它会通过 agy CLI 帮你调用模型
 
 ### 切换模型
@@ -313,7 +313,7 @@ Antigravity 支持多个模型，默认是 Gemini 3.5 Flash。如果想换模型
 
 1. 在 PowerShell 里输入 `agy` 进入交互模式
 2. 输入 `/model` 查看和切换可用模型
-3. 选好后退出（`Ctrl+C`），之后 Aion Chat 走 Antigravity 管线就会使用你选的模型
+3. 选好后退出（`Ctrl+C`），之后 Lumen Chat 走 Antigravity 管线就会使用你选的模型
 
 ### 注意事项
 

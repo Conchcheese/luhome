@@ -1,4 +1,4 @@
-package com.aion.chat;
+package com.lumen.chat;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -24,7 +24,7 @@ import java.util.concurrent.Executors;
  * 3. 后台线程编码，不阻塞摄像头回调
  * 4. capture() 仅截图时调用，用高质量 JPEG
  *
- * 前端调用: window.AionCamera.start/stop/flip/getFrame/capture/isRunning/getFacing
+ * 前端调用: window.LumenCamera.start/stop/flip/getFrame/capture/isRunning/getFacing
  * 前端无需做 CSS rotation — Java 端已旋转好
  */
 @SuppressWarnings("deprecation")

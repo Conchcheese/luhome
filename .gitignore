@@ -11,37 +11,37 @@ venv/
 .idea/
 
 # ── 用户数据（含隐私信息，不应上传） ──
-aion-chat/data/chat.db
-aion-chat/data/settings.json
-aion-chat/data/worldbook.json
-aion-chat/data/chat_status.json
-aion-chat/data/digest_anchor.json
-aion-chat/data/cam_config.json
-aion-chat/data/location_config.json
-aion-chat/data/location_status.json
-aion-chat/data/chats/*.md
-aion-chat/data/chats/_index.json
-aion-chat/data/monitor_logs/*.jsonl
-aion-chat/data/activity_logs/*.jsonl
-aion-chat/data/screenshots/*
-aion-chat/data/uploads/*
-aion-chat/data/tts_cache/*
-aion-chat/data/aion.db
-aion-chat/data/theater_personas.json
-aion-chat/data/fund_config.json
-aion-chat/data/fund_cache.json
-aion-chat/data/chatroom_config.json
-aion-chat/data/chatroom_images/
-aion-chat/data/mcp_servers.json
-aion-chat/data/home_assistant_mcp.json
-aion-chat/data/home_assistant_aliases.json
-aion-chat/data/homeassistant-config/
-aion-chat/data/wallpaper_config.json
-aion-chat/data/ghost_forest/*.json
-aion-chat/data/books/
-aion-chat/data/cert.pem
-aion-chat/data/key.pem
-aion-chat/data/tmp/
+lumen-chat/data/chat.db
+lumen-chat/data/settings.json
+lumen-chat/data/worldbook.json
+lumen-chat/data/chat_status.json
+lumen-chat/data/digest_anchor.json
+lumen-chat/data/cam_config.json
+lumen-chat/data/location_config.json
+lumen-chat/data/location_status.json
+lumen-chat/data/chats/*.md
+lumen-chat/data/chats/_index.json
+lumen-chat/data/monitor_logs/*.jsonl
+lumen-chat/data/activity_logs/*.jsonl
+lumen-chat/data/screenshots/*
+lumen-chat/data/uploads/*
+lumen-chat/data/tts_cache/*
+lumen-chat/data/lumen.db
+lumen-chat/data/theater_personas.json
+lumen-chat/data/fund_config.json
+lumen-chat/data/fund_cache.json
+lumen-chat/data/chatroom_config.json
+lumen-chat/data/chatroom_images/
+lumen-chat/data/mcp_servers.json
+lumen-chat/data/home_assistant_mcp.json
+lumen-chat/data/home_assistant_aliases.json
+lumen-chat/data/homeassistant-config/
+lumen-chat/data/wallpaper_config.json
+lumen-chat/data/ghost_forest/*.json
+lumen-chat/data/books/
+lumen-chat/data/cert.pem
+lumen-chat/data/key.pem
+lumen-chat/data/tmp/
 
 # ── Connor-Codex 用户数据 ──
 Connor-Codex/messages.jsonl
@@ -53,12 +53,12 @@ Connor-Codex/package-lock.json
 Connor-Codex/*.log
 
 # ── 保留空文件夹的 .gitkeep ──
-!aion-chat/data/chats/.gitkeep
-!aion-chat/data/monitor_logs/.gitkeep
-!aion-chat/data/activity_logs/.gitkeep
-!aion-chat/data/screenshots/.gitkeep
-!aion-chat/data/uploads/.gitkeep
-!aion-chat/data/tts_cache/.gitkeep
+!lumen-chat/data/chats/.gitkeep
+!lumen-chat/data/monitor_logs/.gitkeep
+!lumen-chat/data/activity_logs/.gitkeep
+!lumen-chat/data/screenshots/.gitkeep
+!lumen-chat/data/uploads/.gitkeep
+!lumen-chat/data/tts_cache/.gitkeep
 
 # ── 独立 Demo / 测试项目（不属于主程序） ──
 Active/
@@ -73,10 +73,10 @@ import_mw_rag.py
 fix_schedules.py
 
 # ── Android 构建产物 ──
-AionApp/app/build/
-AionApp/.gradle/
-AionApp/build/
-AionApp/local.properties
+LumenApp/app/build/
+LumenApp/.gradle/
+LumenApp/build/
+LumenApp/local.properties
 *.apk
 *.aab
 

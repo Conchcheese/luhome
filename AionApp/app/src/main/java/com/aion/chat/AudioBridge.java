@@ -1,4 +1,4 @@
-package com.aion.chat;
+package com.lumen.chat;
 
 import android.media.AudioFormat;
 import android.media.AudioRecord;
@@ -11,7 +11,7 @@ import android.webkit.WebView;
  * 原生麦克风桥接 — 绕过 WebView getUserMedia 的 HTTPS 限制
  * 录音线程实时采集 PCM，通过 evaluateJavascript 推送给前端 JS
  *
- * 前端调用: window.AionAudio.start() / stop() / isRecording()
+ * 前端调用: window.LumenAudio.start() / stop() / isRecording()
  * 前端接收: remoteVoice._onNativeChunk(base64)
  */
 public class AudioBridge {
@@ -86,7 +86,7 @@ public class AudioBridge {
                     });
                 }
             }
-        }, "AionMicThread").start();
+        }, "LumenMicThread").start();
 
         return true;
     }

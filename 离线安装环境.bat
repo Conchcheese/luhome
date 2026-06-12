@@ -1,11 +1,11 @@
 @echo off
 setlocal
 chcp 65001 >nul
-title Aion Chat 离线安装（无需联网）
+title Lumen Chat 离线安装（无需联网）
 cd /d "%~dp0"
 
 echo ════════════════════════════════════════
-echo   Aion Chat 离线一键安装
+echo   Lumen Chat 离线一键安装
 echo   （所有依赖已内置，无需联网）
 echo ════════════════════════════════════════
 echo.
@@ -125,7 +125,7 @@ if not exist "vendor" (
     exit /b 1
 )
 
-.venv\Scripts\python -m pip install --no-index --find-links "%~dp0vendor" -r "%~dp0aion-chat\requirements.txt" -q
+.venv\Scripts\python -m pip install --no-index --find-links "%~dp0vendor" -r "%~dp0lumen-chat\requirements.txt" -q
 if errorlevel 1 (
     echo.
     echo    离线安装出错，正在尝试逐个安装...

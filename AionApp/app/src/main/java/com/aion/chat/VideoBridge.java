@@ -1,4 +1,4 @@
-package com.aion.chat;
+package com.lumen.chat;
 
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
  * 原生视频录制桥接 — 复用 CameraBridge 的预览帧 + AudioBridge 的 PCM 帧
  * 使用 MediaCodec(H.264+AAC) + MediaMuxer 生成 MP4，录制期间预览不中断
  *
- * 前端调用: window.AionVideo.startRecord(width, height) / stopRecord() / cancel() / isRecording()
+ * 前端调用: window.LumenVideo.startRecord(width, height) / stopRecord() / cancel() / isRecording()
  * 数据来源: CameraBridge.onVideoFrame() 和 AudioBridge.onAudioFrame() 自动推送
  */
 public class VideoBridge {

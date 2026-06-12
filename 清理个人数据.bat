@@ -50,76 +50,76 @@ if /i not "%CONFIRM%"=="Y" (
 echo.
 echo 正在清理...
 
-:: ── aion-chat/data/ ──
-if exist "aion-chat\data\chat.db" del /q "aion-chat\data\chat.db"
-if exist "aion-chat\data\chat_status.json" del /q "aion-chat\data\chat_status.json"
-if exist "aion-chat\data\digest_anchor.json" del /q "aion-chat\data\digest_anchor.json"
-if exist "aion-chat\data\cam_config.json" del /q "aion-chat\data\cam_config.json"
-if exist "aion-chat\data\location_status.json" del /q "aion-chat\data\location_status.json"
+:: ── lumen-chat/data/ ──
+if exist "lumen-chat\data\chat.db" del /q "lumen-chat\data\chat.db"
+if exist "lumen-chat\data\chat_status.json" del /q "lumen-chat\data\chat_status.json"
+if exist "lumen-chat\data\digest_anchor.json" del /q "lumen-chat\data\digest_anchor.json"
+if exist "lumen-chat\data\cam_config.json" del /q "lumen-chat\data\cam_config.json"
+if exist "lumen-chat\data\location_status.json" del /q "lumen-chat\data\location_status.json"
 
-if exist "aion-chat\data\chats" rmdir /s /q "aion-chat\data\chats"
-mkdir "aion-chat\data\chats"
+if exist "lumen-chat\data\chats" rmdir /s /q "lumen-chat\data\chats"
+mkdir "lumen-chat\data\chats"
 
-if exist "aion-chat\data\monitor_logs" rmdir /s /q "aion-chat\data\monitor_logs"
-mkdir "aion-chat\data\monitor_logs"
+if exist "lumen-chat\data\monitor_logs" rmdir /s /q "lumen-chat\data\monitor_logs"
+mkdir "lumen-chat\data\monitor_logs"
 
-if exist "aion-chat\data\screenshots" rmdir /s /q "aion-chat\data\screenshots"
-mkdir "aion-chat\data\screenshots"
+if exist "lumen-chat\data\screenshots" rmdir /s /q "lumen-chat\data\screenshots"
+mkdir "lumen-chat\data\screenshots"
 
-if exist "aion-chat\data\uploads" rmdir /s /q "aion-chat\data\uploads"
-mkdir "aion-chat\data\uploads"
+if exist "lumen-chat\data\uploads" rmdir /s /q "lumen-chat\data\uploads"
+mkdir "lumen-chat\data\uploads"
 
-if exist "aion-chat\data\activity_logs" rmdir /s /q "aion-chat\data\activity_logs"
-mkdir "aion-chat\data\activity_logs"
+if exist "lumen-chat\data\activity_logs" rmdir /s /q "lumen-chat\data\activity_logs"
+mkdir "lumen-chat\data\activity_logs"
 
-if exist "aion-chat\data\tts_cache" rmdir /s /q "aion-chat\data\tts_cache"
-mkdir "aion-chat\data\tts_cache"
+if exist "lumen-chat\data\tts_cache" rmdir /s /q "lumen-chat\data\tts_cache"
+mkdir "lumen-chat\data\tts_cache"
 
-if exist "aion-chat\data\tmp" rmdir /s /q "aion-chat\data\tmp"
-mkdir "aion-chat\data\tmp"
+if exist "lumen-chat\data\tmp" rmdir /s /q "lumen-chat\data\tmp"
+mkdir "lumen-chat\data\tmp"
 
 :: ── 清理奥罗斯幽林游戏数据 ──
-if exist "aion-chat\data\ghost_forest" rmdir /s /q "aion-chat\data\ghost_forest"
-mkdir "aion-chat\data\ghost_forest"
+if exist "lumen-chat\data\ghost_forest" rmdir /s /q "lumen-chat\data\ghost_forest"
+mkdir "lumen-chat\data\ghost_forest"
 
 :: ── 清理阅读书籍数据 ──
-if exist "aion-chat\data\books" rmdir /s /q "aion-chat\data\books"
-mkdir "aion-chat\data\books"
+if exist "lumen-chat\data\books" rmdir /s /q "lumen-chat\data\books"
+mkdir "lumen-chat\data\books"
 
 :: ── 清理小剧场角色预设 ──
-if exist "aion-chat\data\theater_personas.json" del /q "aion-chat\data\theater_personas.json"
+if exist "lumen-chat\data\theater_personas.json" del /q "lumen-chat\data\theater_personas.json"
 
 :: ── 清理聊天室配置 + 图片 ──
-if exist "aion-chat\data\chatroom_config.json" del /q "aion-chat\data\chatroom_config.json"
-if exist "aion-chat\data\chatroom_images" rmdir /s /q "aion-chat\data\chatroom_images"
+if exist "lumen-chat\data\chatroom_config.json" del /q "lumen-chat\data\chatroom_config.json"
+if exist "lumen-chat\data\chatroom_images" rmdir /s /q "lumen-chat\data\chatroom_images"
 
 :: ── 清理基金配置 + 缓存 ──
-if exist "aion-chat\data\fund_config.json" del /q "aion-chat\data\fund_config.json"
-if exist "aion-chat\data\fund_cache.json" del /q "aion-chat\data\fund_cache.json"
+if exist "lumen-chat\data\fund_config.json" del /q "lumen-chat\data\fund_config.json"
+if exist "lumen-chat\data\fund_cache.json" del /q "lumen-chat\data\fund_cache.json"
 
 :: ── 清理 MCP 服务配置 ──
-if exist "aion-chat\data\mcp_servers.json" del /q "aion-chat\data\mcp_servers.json"
+if exist "lumen-chat\data\mcp_servers.json" del /q "lumen-chat\data\mcp_servers.json"
 
 :: ── 清理 Home Assistant / 智能家居配置 ──
-if exist "aion-chat\data\home_assistant_mcp.json" del /q "aion-chat\data\home_assistant_mcp.json"
-if exist "aion-chat\data\home_assistant_aliases.json" del /q "aion-chat\data\home_assistant_aliases.json"
-if exist "aion-chat\data\homeassistant-config" rmdir /s /q "aion-chat\data\homeassistant-config"
+if exist "lumen-chat\data\home_assistant_mcp.json" del /q "lumen-chat\data\home_assistant_mcp.json"
+if exist "lumen-chat\data\home_assistant_aliases.json" del /q "lumen-chat\data\home_assistant_aliases.json"
+if exist "lumen-chat\data\homeassistant-config" rmdir /s /q "lumen-chat\data\homeassistant-config"
 
 :: ── 清理 Gemini CLI 调试日志 ──
-if exist "aion-chat\data\cli_debug" rmdir /s /q "aion-chat\data\cli_debug"
+if exist "lumen-chat\data\cli_debug" rmdir /s /q "lumen-chat\data\cli_debug"
 
 :: ── 清理聊天室图片缓存 ──
-if exist "aion-chat\data\chatroom_images" rmdir /s /q "aion-chat\data\chatroom_images"
+if exist "lumen-chat\data\chatroom_images" rmdir /s /q "lumen-chat\data\chatroom_images"
 
 :: ── 清理壁纸配置 ──
-if exist "aion-chat\data\wallpaper_config.json" del /q "aion-chat\data\wallpaper_config.json"
+if exist "lumen-chat\data\wallpaper_config.json" del /q "lumen-chat\data\wallpaper_config.json"
 
 :: ── 清理 SSL 证书 ──
-if exist "aion-chat\data\cert.pem" del /q "aion-chat\data\cert.pem"
-if exist "aion-chat\data\key.pem" del /q "aion-chat\data\key.pem"
+if exist "lumen-chat\data\cert.pem" del /q "lumen-chat\data\cert.pem"
+if exist "lumen-chat\data\key.pem" del /q "lumen-chat\data\key.pem"
 
-:: ── 清理 aion.db 旧数据库 ──
-if exist "aion-chat\data\aion.db" del /q "aion-chat\data\aion.db"
+:: ── 清理 lumen.db 旧数据库 ──
+if exist "lumen-chat\data\lumen.db" del /q "lumen-chat\data\lumen.db"
 
 :: ── Connor-Codex 个人数据 ──
 if exist "Connor-Codex\messages.jsonl" del /q "Connor-Codex\messages.jsonl"
@@ -134,13 +134,13 @@ if exist "Connor-Codex\package-lock.json" del /q "Connor-Codex\package-lock.json
 del /q "Connor-Codex\*.log" 2>nul
 
 :: 重置 settings.json（清空所有 API Key）
-echo {} > "aion-chat\data\settings.json"
+echo {} > "lumen-chat\data\settings.json"
 
 :: 重置世界书人设
-echo {"ai_persona": "", "user_persona": "", "ai_name": "AI", "user_name": ""} > "aion-chat\data\worldbook.json"
+echo {"ai_persona": "", "user_persona": "", "ai_name": "AI", "user_name": ""} > "lumen-chat\data\worldbook.json"
 
 :: 重置定位配置（清空高德Key和家坐标）
-echo {"amap_key": "", "home_lng": 0, "home_lat": 0, "home_threshold": 500, "heartbeat_outdoor_min": 5, "heartbeat_home_min": 30, "poi_types": {"餐饮美食": "050000", "风景名胜": "110000", "休闲娱乐": "100000", "购物": "060000"}, "poi_radius": 2000, "enabled": false, "quiet_hours_enabled": true, "quiet_hours_start": "00:00", "quiet_hours_end": "10:00", "movement_threshold": 500} > "aion-chat\data\location_config.json"
+echo {"amap_key": "", "home_lng": 0, "home_lat": 0, "home_threshold": 500, "heartbeat_outdoor_min": 5, "heartbeat_home_min": 30, "poi_types": {"餐饮美食": "050000", "风景名胜": "110000", "休闲娱乐": "100000", "购物": "060000"}, "poi_radius": 2000, "enabled": false, "quiet_hours_enabled": true, "quiet_hours_start": "00:00", "quiet_hours_end": "10:00", "movement_threshold": 500} > "lumen-chat\data\location_config.json"
 
 :: ── 删除个人笔记/备份文件 ──
 if exist "自己看的存档.txt" del /q "自己看的存档.txt"
@@ -156,15 +156,15 @@ mkdir "Active\screenshots"
 if exist ".vscode" rmdir /s /q ".vscode"
 
 :: ── 清理 Android App 硬编码 IP ──
-set "JAVA_DIR=AionApp\app\src\main\java\com\aion\chat"
+set "JAVA_DIR=LumenApp\app\src\main\java\com\lumen\chat"
 if exist "%JAVA_DIR%\LauncherActivity.java" (
     powershell -Command "(Get-Content '%JAVA_DIR%\LauncherActivity.java' -Encoding UTF8) -replace 'http://[0-9.]+:8080/chat', 'http://192.168.xx.xxx:8080/chat' | Set-Content '%JAVA_DIR%\LauncherActivity.java' -Encoding UTF8"
 )
 if exist "%JAVA_DIR%\WebViewActivity.java" (
     powershell -Command "(Get-Content '%JAVA_DIR%\WebViewActivity.java' -Encoding UTF8) -replace 'http://[0-9.]+:8080/chat', 'http://192.168.xx.xxx:8080/chat' | Set-Content '%JAVA_DIR%\WebViewActivity.java' -Encoding UTF8"
 )
-if exist "%JAVA_DIR%\AionPushService.java" (
-    powershell -Command "(Get-Content '%JAVA_DIR%\AionPushService.java' -Encoding UTF8) -replace 'http://[0-9.]+:8080/chat', 'http://192.168.xx.xxx:8080/chat' | Set-Content '%JAVA_DIR%\AionPushService.java' -Encoding UTF8"
+if exist "%JAVA_DIR%\LumenPushService.java" (
+    powershell -Command "(Get-Content '%JAVA_DIR%\LumenPushService.java' -Encoding UTF8) -replace 'http://[0-9.]+:8080/chat', 'http://192.168.xx.xxx:8080/chat' | Set-Content '%JAVA_DIR%\LumenPushService.java' -Encoding UTF8"
 )
 
 :: ── 删除虚拟环境 ──

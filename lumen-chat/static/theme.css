@@ -1,0 +1,498 @@
+/* ═══════════════════════════════════════════════════════════
+   Lumen — Dark Theme  ·  Tech / Glass Morphism
+   ─────────────────────────────────────────────────────────── */
+
+/* ── Dark mode design tokens ─────────────────────────────── */
+:root[data-theme="dark"],
+body[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #070b14;
+  --surface:  rgba(255, 255, 255, 0.055);
+  --surface2: rgba(255, 255, 255, 0.090);
+  --surface3: rgba(0, 204, 245, 0.065);
+
+  --border:        rgba(255, 255, 255, 0.082);
+  --border-strong: rgba(0, 204, 245, 0.35);
+
+  --text:  #d8e8f8;
+  --text2: #6e8ca8;
+  --text3: #3a5568;
+
+  --accent:  #00ccf5;
+  --accent2: #4d88ff;
+
+  --danger:  #ff4466;
+  --success: #00e5a0;
+  --warn:    #ffb830;
+
+  --user-bg: rgba(77, 136, 255, 0.18);
+  --ai-bg:   rgba(0, 204, 245, 0.10);
+
+  --soft-shadow: 0 8px 32px rgba(0, 0, 0, 0.52), 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+/* ── Dark body ───────────────────────────────────────────── */
+body[data-theme="dark"] {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% -8%, rgba(0, 200, 255, 0.07) 0%, transparent 100%),
+    radial-gradient(ellipse 55% 45% at 92% 96%,  rgba(77, 100, 255, 0.05) 0%, transparent 100%),
+    #070b14;
+  color: var(--text);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+body[data-theme="dark"]::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 200, 255, 0.14);
+}
+body[data-theme="dark"]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 200, 255, 0.28);
+}
+
+/* ── Top bar / reader bars ───────────────────────────────── */
+body[data-theme="dark"] .top-bar,
+body[data-theme="dark"] .reader-topbar,
+body[data-theme="dark"] .reader-footer {
+  background: rgba(7, 11, 20, 0.80);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body[data-theme="dark"] .top-bar h2,
+body[data-theme="dark"] .reader-topbar .chapter-title {
+  color: var(--text);
+}
+
+body[data-theme="light"] .reader-topbar,
+body[data-theme="light"] .reader-footer {
+  background: rgba(255, 248, 242, 0.88);
+  border-color: rgba(200, 110, 70, 0.18);
+  color: #3a1c0a;
+}
+
+/* ── Cards / surfaces ────────────────────────────────────── */
+body[data-theme="dark"] .section,
+body[data-theme="dark"] .fund-toggle,
+body[data-theme="dark"] .market-card,
+body[data-theme="dark"] .add-form,
+body[data-theme="dark"] .edit-panel,
+body[data-theme="dark"] .loading-spinner,
+body[data-theme="dark"] .book-card,
+body[data-theme="dark"] .anno-popup-card,
+body[data-theme="dark"] .hl-popup-card,
+body[data-theme="dark"] .ask-popup-card,
+body[data-theme="dark"] .reader-reply,
+body[data-theme="dark"] .toc-panel,
+body[data-theme="dark"] .publish-modal,
+body[data-theme="dark"] .comment-modal,
+body[data-theme="dark"] .comment-action-sheet,
+body[data-theme="dark"] .source-modal,
+body[data-theme="dark"] .activity-detail-modal {
+  background: rgba(12, 18, 34, 0.82);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: var(--soft-shadow);
+}
+
+/* ── List containers ─────────────────────────────────────── */
+body[data-theme="dark"] .list-container,
+body[data-theme="dark"] .sch-list,
+body[data-theme="dark"] .log-list,
+body[data-theme="dark"] .mem-list,
+body[data-theme="dark"] .holding-list,
+body[data-theme="dark"] .vital-card,
+body[data-theme="dark"] .day-cell,
+body[data-theme="dark"] .sleep-box,
+body[data-theme="dark"] .comments-list,
+body[data-theme="dark"] .moment-image,
+body[data-theme="dark"] .preview-item,
+body[data-theme="dark"] .reader-content {
+  background: rgba(255, 255, 255, 0.030);
+  border-color: var(--border);
+}
+
+/* ── Form controls ───────────────────────────────────────── */
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] .form-input,
+body[data-theme="dark"] .mem-content-edit,
+body[data-theme="dark"] .reader-reply-input input,
+body[data-theme="dark"] .ask-popup-card .ask-input-row input {
+  background: rgba(255, 255, 255, 0.042);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body[data-theme="dark"] input::placeholder,
+body[data-theme="dark"] textarea::placeholder {
+  color: var(--text3);
+}
+
+body[data-theme="dark"] input:focus,
+body[data-theme="dark"] textarea:focus,
+body[data-theme="dark"] .form-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 204, 245, 0.10);
+  outline: none;
+}
+
+/* ── Secondary buttons ───────────────────────────────────── */
+body[data-theme="dark"] .btn-cancel,
+body[data-theme="dark"] .action-btn.secondary,
+body[data-theme="dark"] .calendar-toggle,
+body[data-theme="dark"] .calendar-nav button,
+body[data-theme="dark"] .summary-btn,
+body[data-theme="dark"] .anno-popup-card .anno-close button,
+body[data-theme="dark"] .hl-popup-card .hl-close-btn,
+body[data-theme="dark"] .source-toolbar button,
+body[data-theme="dark"] .load-more-btn,
+body[data-theme="dark"] .sch-add-row2 select {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ── Status badges ───────────────────────────────────────── */
+body[data-theme="dark"] .digest-status.success,
+body[data-theme="dark"] .sch-type.reminder,
+body[data-theme="dark"] .log-device.pc {
+  background: rgba(0, 204, 245, 0.10);
+  color: #55d8f5;
+}
+
+body[data-theme="dark"] .digest-status.info {
+  background: rgba(77, 136, 255, 0.10);
+  color: #88aaff;
+}
+
+body[data-theme="dark"] .digest-status.error,
+body[data-theme="dark"] .action-btn.warn {
+  background: rgba(255, 68, 102, 0.12);
+  color: #ff7a96;
+}
+
+body[data-theme="dark"] .sch-type.alarm,
+body[data-theme="dark"] .alert-tag,
+body[data-theme="dark"] .log-core {
+  background: rgba(255, 184, 48, 0.12);
+  color: #ffd070;
+}
+
+body[data-theme="dark"] .sch-type.monitor,
+body[data-theme="dark"] .log-device.phone {
+  background: rgba(0, 229, 160, 0.10);
+  color: #44edb0;
+}
+
+/* ── Chat bubbles (reading / theater rc-style) ───────────── */
+body[data-theme="dark"] .rc-bubble {
+  color: var(--text);
+}
+body[data-theme="dark"] .rc-row.user .rc-bubble {
+  background: rgba(77, 136, 255, 0.18);
+  border-color: rgba(77, 136, 255, 0.22);
+}
+body[data-theme="dark"] .rc-row.assistant .rc-bubble {
+  background: rgba(0, 204, 245, 0.10);
+  border-color: rgba(0, 204, 245, 0.18);
+}
+body[data-theme="dark"] .rc-row.connor .rc-bubble {
+  background: rgba(110, 55, 255, 0.16);
+  border-color: rgba(140, 90, 255, 0.22);
+}
+body[data-theme="light"] .rc-bubble { color: #3a1c0a; }
+body[data-theme="light"] .rc-row.user .rc-bubble {
+  background: rgba(255, 210, 185, 0.40);
+  border-color: rgba(217, 119, 87, 0.22);
+}
+body[data-theme="light"] .rc-row.assistant .rc-bubble {
+  background: rgba(255, 225, 200, 0.35);
+  border-color: rgba(200, 130, 80, 0.20);
+}
+body[data-theme="light"] .rc-row.connor .rc-bubble {
+  background: rgba(235, 215, 195, 0.38);
+  border-color: rgba(180, 120, 70, 0.20);
+}
+
+/* ── Toast / notification ────────────────────────────────── */
+body[data-theme="dark"] .toast,
+body[data-theme="dark"] .toast-msg {
+  background: rgba(8, 14, 28, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* ── Pseudo-element (reset) ──────────────────────────────── */
+body[data-theme="dark"]::before { background: transparent; }
+body[data-theme="light"]::before { background: transparent; }
+
+/* ════════════════════════════════════════════════════════════
+   Gift page
+   ════════════════════════════════════════════════════════════ */
+body.gift-page[data-theme="dark"] {
+  background: #090d18;
+  color: #d8e6f2;
+}
+body.gift-page[data-theme="dark"] .top-bar {
+  background: rgba(9, 13, 24, 0.88);
+  border-bottom-color: rgba(0, 204, 245, 0.10);
+}
+body.gift-page[data-theme="dark"] .top-bar h2 { color: #d8e6f2; }
+body.gift-page[data-theme="dark"] .page-content {
+  background: linear-gradient(180deg, #090d18 0%, #0d1428 100%);
+}
+
+body.gift-page[data-theme="light"] {
+  background: #fff4ed;
+  color: #3a1c0a;
+}
+body.gift-page[data-theme="light"] .top-bar {
+  background: rgba(255, 248, 242, 0.90);
+  border-bottom-color: rgba(200, 110, 70, 0.16);
+}
+body.gift-page[data-theme="light"] .top-bar h2 { color: #3a1c0a; }
+body.gift-page[data-theme="light"] .page-content {
+  background: linear-gradient(180deg, #fff4ed 0%, #ffe8d4 100%);
+}
+body.gift-page[data-theme="light"] .test-gift-btn {
+  background: rgba(217, 119, 87, 0.10);
+  border-color: rgba(217, 119, 87, 0.22);
+  color: #b05030;
+}
+body.gift-page[data-theme="light"] .gallery-header::after {
+  background: linear-gradient(90deg, transparent, rgba(217, 119, 87, 0.45), transparent);
+}
+body.gift-page[data-theme="light"] .gift-detail-overlay,
+body.gift-page[data-theme="light"] .confirm-overlay {
+  background: rgba(80, 30, 10, 0.22);
+}
+body.gift-page[data-theme="light"] .gallery-title { color: #3a1c0a; }
+body.gift-page[data-theme="light"] .gallery-subtitle,
+body.gift-page[data-theme="light"] .gallery-empty-text,
+body.gift-page[data-theme="light"] .gift-detail-date {
+  color: rgba(100, 50, 20, 0.55);
+}
+body.gift-page[data-theme="light"] .gift-thumb,
+body.gift-page[data-theme="light"] .gift-detail-box,
+body.gift-page[data-theme="light"] .confirm-box {
+  background: rgba(255, 248, 242, 0.94);
+  border-color: rgba(217, 119, 87, 0.20);
+  color: #3a1c0a;
+  box-shadow: 0 12px 40px rgba(160, 80, 40, 0.12);
+}
+body.gift-page[data-theme="light"] .gift-detail-msg,
+body.gift-page[data-theme="light"] .confirm-box p { color: #3a1c0a; }
+body.gift-page[data-theme="light"] .btn-detail-close,
+body.gift-page[data-theme="light"] .btn-confirm-cancel {
+  background: rgba(217, 119, 87, 0.10);
+  color: #9a4020;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Theater page
+   ════════════════════════════════════════════════════════════ */
+body.theater-page[data-theme="dark"] {
+  --bg: #0c1018;
+  --surface: rgba(255, 255, 255, 0.055);
+  --surface2: rgba(255, 255, 255, 0.082);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #d4e2f0;
+  --text2: #647e98;
+  --text3: #34505e;
+  --accent: #00ccf5;
+  --accent2: #4d88ff;
+  --danger: #ff4466;
+  background: #0c1018;
+  color: var(--text);
+}
+body.theater-page[data-theme="dark"] .input-box {
+  background: rgba(10, 14, 22, 0.90);
+  border-top-color: var(--border);
+}
+body.theater-page[data-theme="dark"] .input-row textarea,
+body.theater-page[data-theme="dark"] .persona-modal input,
+body.theater-page[data-theme="dark"] .persona-modal select,
+body.theater-page[data-theme="dark"] .persona-modal textarea,
+body.theater-page[data-theme="dark"] .config-popup select {
+  background: rgba(255, 255, 255, 0.048);
+  border-color: var(--border);
+  color: var(--text);
+}
+body.theater-page[data-theme="dark"] .input-row textarea::placeholder,
+body.theater-page[data-theme="dark"] .persona-modal textarea::placeholder,
+body.theater-page[data-theme="dark"] .persona-modal input::placeholder {
+  color: var(--text3);
+}
+body.theater-page[data-theme="light"] {
+  --bg: #fff4ed;
+  --surface: rgba(255, 248, 242, 0.92);
+  --surface2: rgba(255, 237, 222, 0.52);
+  --border: rgba(200, 110, 70, 0.18);
+  --text: #3a1c0a;
+  --text2: #7a4020;
+  --text3: #b07040;
+  --accent: #D97757;
+  --accent2: #E89A72;
+  --danger: #cf222e;
+  background: #fff4ed;
+  color: #3a1c0a;
+}
+body.theater-page[data-theme="light"] .app {
+  background: #fff4ed;
+  color: #3a1c0a;
+}
+body.theater-page[data-theme="light"] .chat-header {
+  background: rgba(255, 248, 242, 0.90);
+  border-bottom-color: rgba(200, 110, 70, 0.18);
+  box-shadow: 0 1px 12px rgba(160, 80, 40, 0.08);
+}
+body.theater-page[data-theme="light"] .msg-row.user .msg-bubble {
+  background: rgba(255, 210, 185, 0.40);
+  color: #3a1c0a;
+  border-color: rgba(217, 119, 87, 0.22);
+}
+body.theater-page[data-theme="light"] .msg-row.assistant .msg-bubble {
+  background: rgba(255, 225, 200, 0.35);
+  color: #3a1c0a;
+  border-color: rgba(200, 130, 80, 0.20);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Doudizhu page
+   ════════════════════════════════════════════════════════════ */
+body.doudizhu-page[data-theme="light"] {
+  --felt: #2a8a6e;
+  --felt-deep: #d6f0e6;
+  --felt-line: rgba(0, 70, 50, 0.12);
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --text: #0a2820;
+  --muted: rgba(10, 40, 32, 0.58);
+  --gold: #9a6418;
+  --black: #1a1a18;
+  --blue: #1e5cb0;
+}
+body.doudizhu-page[data-theme="light"] {
+  background:
+    radial-gradient(circle at 50% 22%, rgba(0, 190, 160, 0.14), transparent 48%),
+    linear-gradient(135deg, #d4f0e6 0%, #7acca8 48%, #cceae0 100%);
+}
+body.doudizhu-page[data-theme="light"] .table,
+body.doudizhu-page[data-theme="light"] .action-bar {
+  box-shadow: 0 16px 40px rgba(0, 60, 40, 0.14);
+}
+body.doudizhu-page[data-theme="light"] .action-bar {
+  background: rgba(255, 255, 255, 0.84);
+}
+body.doudizhu-page[data-theme="light"] .settlement-panel {
+  background: rgba(255, 255, 255, 0.97);
+  color: var(--text);
+}
+
+/* ════════════════════════════════════════════════════════════
+   Seeky pet
+   ════════════════════════════════════════════════════════════ */
+body[data-theme="dark"] .seeky-app {
+  --ink: #cce8ff;
+  --muted: #5a8ab0;
+  --blue: #55aaee;
+  --blue-2: #33ccff;
+  --cyan: #00ddff;
+  --warm: #ffcc55;
+  --line: rgba(0, 200, 255, 0.16);
+}
+body[data-theme="dark"] .seeky-app {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 200, 255, 0.09), transparent 42%),
+    linear-gradient(180deg, #070b14 0%, #091428 55%, #0a1a3a 100%);
+}
+body[data-theme="dark"] .seeky-app .top-bar,
+body[data-theme="dark"] .speech-bubble,
+body[data-theme="dark"] .care-stat,
+body[data-theme="dark"] .composer textarea,
+body[data-theme="dark"] .side-drawer,
+body[data-theme="dark"] .history-panel,
+body[data-theme="dark"] .config-panel,
+body[data-theme="dark"] .review-panel,
+body[data-theme="dark"] .drawer-item,
+body[data-theme="dark"] .history-bubble,
+body[data-theme="dark"] .ghost-btn,
+body[data-theme="dark"] .review-status,
+body[data-theme="dark"] .review-intro,
+body[data-theme="dark"] .review-item,
+body[data-theme="dark"] .review-section-head,
+body[data-theme="dark"] .review-quotes div,
+body[data-theme="dark"] .field input,
+body[data-theme="dark"] .field select,
+body[data-theme="dark"] .persona-field textarea {
+  background: rgba(8, 16, 44, 0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: rgba(0, 200, 255, 0.13);
+  color: var(--ink);
+}
+body[data-theme="dark"] .icon-btn,
+body[data-theme="dark"] .care-action-icon,
+body[data-theme="dark"] .pet-status {
+  background: rgba(0, 200, 255, 0.12);
+  color: var(--cyan);
+}
+body[data-theme="dark"] .aquarium {
+  background:
+    linear-gradient(180deg,
+      rgba(5, 18, 56, 0.97) 0%,
+      rgba(4, 24, 52, 0.97) 62%,
+      rgba(6, 16, 40, 0.99) 100%);
+}
+body[data-theme="dark"] .pet-chat-row.seeky .pet-chat-bubble,
+body[data-theme="dark"] .pet-pop-bubble {
+  background: rgba(6, 20, 52, 0.88);
+  color: var(--ink);
+  border-color: rgba(0, 220, 255, 0.18);
+}
+body[data-theme="dark"] .chat-bubble {
+  background: rgba(8, 18, 50, 0.90);
+  color: #cce8ff;
+  border: 1px solid rgba(0, 200, 255, 0.16);
+}
+
+/* ── Settings panel (light) ──────────────────────────────── */
+body[data-theme="light"] #settingsPanel {
+  background: rgba(255, 248, 242, 0.96);
+  color: #3a1c0a;
+}
+body[data-theme="light"] #settingsPanel h3 { color: #3a1c0a; }
+body[data-theme="light"] #settingsPanel label,
+body[data-theme="light"] .settings-row span { color: #7a4020; }
+body[data-theme="light"] .settings-row input[type="number"] {
+  background: rgba(200, 100, 60, 0.05);
+  border-color: rgba(200, 110, 70, 0.16);
+  color: #3a1c0a;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Ghost Forest page
+   ════════════════════════════════════════════════════════════ */
+body.ghost-forest-page[data-theme="light"] .sub-page {
+  --bg: #eef4ee;
+  --surface: #f6fef6;
+  --surface2: #e0ece0;
+  --border: rgba(0, 0, 0, 0.08);
+  --text: #182818;
+  --text2: #446844;
+  --text3: #789878;
+  --accent: #228833;
+  --accent-glow: rgba(34, 136, 51, 0.18);
+  --danger: #aa3322;
+  background: var(--bg);
+}
+body.ghost-forest-page[data-theme="light"] .top-bar {
+  background: rgba(238, 252, 238, 0.90);
+}

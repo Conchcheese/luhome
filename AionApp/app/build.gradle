@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.aion.chat'
+    namespace 'com.lumen.chat'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.aion.chat"
+        applicationId "com.lumen.chat"
         minSdk 24
         targetSdk 34
         versionCode 1

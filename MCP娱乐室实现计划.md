@@ -13,18 +13,18 @@
 ## 新增文件清单
 
 ### 后端
-1. `aion-chat/mcp_client.py`         — MCP 连接管理器
-2. `aion-chat/routes/playground.py`  — 娱乐室后端路由
-3. `aion-chat/data/mcp_servers.json` — MCP Server 配置文件（自动创建）
+1. `lumen-chat/mcp_client.py`         — MCP 连接管理器
+2. `lumen-chat/routes/playground.py`  — 娱乐室后端路由
+3. `lumen-chat/data/mcp_servers.json` — MCP Server 配置文件（自动创建）
 
 ### 前端
-4. `aion-chat/static/playground.html` — 娱乐室页面
-5. `aion-chat/static/playground.css`  — 样式
-6. `aion-chat/static/playground.js`   — 前端逻辑
+4. `lumen-chat/static/playground.html` — 娱乐室页面
+5. `lumen-chat/static/playground.css`  — 样式
+6. `lumen-chat/static/playground.js`   — 前端逻辑
 
 ### 改动文件（极小改动）
-7. `aion-chat/main.py`     — 注册路由 + 页面路径（约5行）
-8. `aion-chat/static/home.html` — APPS 数组加一项（1行）
+7. `lumen-chat/main.py`     — 注册路由 + 页面路径（约5行）
+8. `lumen-chat/static/home.html` — APPS 数组加一项（1行）
 
 ---
 

@@ -1,4 +1,4 @@
-﻿package com.aion.chat;
+﻿package com.lumen.chat;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -15,7 +15,7 @@ import androidx.appcompat.app.AppCompatActivity;
  */
 public class LauncherActivity extends AppCompatActivity {
 
-    private static final String PREFS       = "aion_prefs";
+    private static final String PREFS       = "lumen_prefs";
     private static final String KEY_URL     = "saved_url";
     private static final String KEY_AUTO    = "auto_connect";
 
@@ -77,7 +77,7 @@ public class LauncherActivity extends AppCompatActivity {
 
     private void startPushService(String url) {
         // 启动前台服务（权限请求移到 WebViewActivity，因为本 Activity 会立即 finish）
-        Intent serviceIntent = new Intent(this, AionPushService.class);
+        Intent serviceIntent = new Intent(this, LumenPushService.class);
         serviceIntent.putExtra("url", url);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent);
